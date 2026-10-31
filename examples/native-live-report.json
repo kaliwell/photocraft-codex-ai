@@ -1,0 +1,9 @@
+{
+  "live_passed": true,
+  "text_input_preserves_document": true,
+  "outside_unchanged": true,
+  "selection_preserved": true,
+  "one_undo_restores_original": true,
+  "generated_via_native_button": true,
+  "note": "Verified in the live native test; Save As document handle refreshed before completing undo/redo verification."
+}

@@ -1,0 +1,8 @@
+# Local development build: avoid lengthy dependency optimization during UI iteration.
+[profile.dev]
+opt-level = 0
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 0
+debug = false

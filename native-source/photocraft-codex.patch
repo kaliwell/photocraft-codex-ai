@@ -1,0 +1,384 @@
+diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
+index da59b5a..efecea0 100644
+--- a/crates/ui-egui/src/canvas.rs
++++ b/crates/ui-egui/src/canvas.rs
+@@ -2055,6 +2055,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
+         camera,
+     };
+     finish_canvas_view(app, ui, &mut view, &tail);
++    if primary {
++        crate::codex_ai::show(app, &ctx, xf);
++    }
+     view
+ }
+ 
+diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
+new file mode 100644
+index 0000000..cd80313
+--- /dev/null
++++ b/crates/ui-egui/src/codex_ai.rs
+@@ -0,0 +1,304 @@
++//! Optional native selection toolbar. Document edits stay in the existing engine commands;
++//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
++use egui::{Context, Rect, Vec2, pos2, vec2};
++use serde_json::{Value, json};
++use std::sync::{Arc, Mutex};
++
++use crate::{PhotocraftApp, canvas::ViewXform, theme::Tokens, widgets};
++
++#[derive(Clone, Default)]
++struct Status {
++    busy: bool,
++    message: String,
++    error: bool,
++    rect: Option<Rect>,
++    input: Option<Rect>,
++    buttons: Vec<(String, Rect)>,
++}
++
++type Shared = Arc<Mutex<Status>>;
++
++#[derive(Clone, Default)]
++struct BoundsCache {
++    key: Option<(photocraft_doc::DocId, u64)>,
++    bounds: Option<[f32; 4]>,
++}
++
++fn shared(ctx: &Context) -> Shared {
++    ctx.data_mut(|d| d.get_temp_mut_or_default::<Shared>(egui::Id::unique("codex-ai-status")).clone())
++}
++
++pub fn inspect(ctx: &Context) -> Value {
++    let state = shared(ctx);
++    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++    json!({"busy": state.busy, "message": state.message, "error": state.error,
++           "rect": state.rect.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
++           "input": state.input.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
++           "buttons": state.buttons.iter().map(|(label, r)| json!({"label": label, "rect": [r.min.x, r.min.y, r.width(), r.height()]})).collect::<Vec<_>>()})
++}
++
++/// Place below the selection; move above it at the bottom edge and clamp to the canvas.
++fn position(selection: Rect, viewport: Rect, size: Vec2) -> egui::Pos2 {
++    let x = (selection.center().x - size.x / 2.0).clamp(viewport.left() + 8.0, (viewport.right() - size.x - 8.0).max(viewport.left() + 8.0));
++    let below = selection.bottom() + 12.0;
++    let y = if below + size.y <= viewport.bottom() - 8.0 { below } else { selection.top() - size.y - 12.0 };
++    pos2(x, y.clamp(viewport.top() + 8.0, (viewport.bottom() - size.y - 8.0).max(viewport.top() + 8.0)))
++}
++
++fn selection_rect(app: &PhotocraftApp, ctx: &Context, xf: ViewXform) -> Option<Rect> {
++    let document = app.session.active()?;
++    let key = (document.doc.id, document.revision);
++    // Exact mask bounds scan tiles. Reuse them while only the camera or ants move.
++    let bounds = ctx.data_mut(|data| {
++        let cache = data.get_temp_mut_or_default::<BoundsCache>(egui::Id::unique("codex-ai-selection-bounds"));
++        if cache.key != Some(key) {
++            cache.key = Some(key);
++            cache.bounds = document.doc.selection.as_ref().and_then(|mask| {
++                let r = mask.content_bounds();
++                (r.width() > 0 && r.height() > 0).then_some([r.x0 as f32, r.y0 as f32, r.x1 as f32, r.y1 as f32])
++            });
++        }
++        cache.bounds
++    })?;
++    let [x0, y0, x1, y1] = bounds;
++    Some(Rect::from_points(&[xf.to_screen(x0, y0), xf.to_screen(x1, y0), xf.to_screen(x0, y1), xf.to_screen(x1, y1)]))
++}
++
++pub fn show(app: &mut PhotocraftApp, ctx: &Context, xf: ViewXform) {
++    if !available() {
++        return;
++    }
++    let status = shared(ctx);
++    {
++        let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        state.rect = None;
++        state.input = None;
++        state.buttons.clear();
++    }
++    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() {
++        return;
++    }
++    let Some(selection) = selection_rect(app, ctx, xf) else { return };
++    if !selection.intersects(xf.rect) || xf.rect.width() < 320.0 || xf.rect.height() < 150.0 {
++        return;
++    }
++    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
++    let width = (xf.rect.width() - 24.0).clamp(280.0, 560.0);
++    let size = vec2(width, 104.0);
++    let anchor = position(selection, xf.rect, size);
++    let tokens = Tokens::get(ctx);
++    let mut input_rect = None;
++    let mut button_rects = Vec::new();
++    let area = egui::Area::new(egui::Id::unique("codex-ai-toolbar")).order(egui::Order::Foreground).fixed_pos(anchor).movable(false).show(ctx, |ui| {
++        ui.set_clip_rect(xf.rect);
++        egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).corner_radius(tokens.radius).inner_margin(10.0).show(
++            ui,
++            |ui| {
++                ui.set_width(width - 20.0);
++                let input = ui.add_enabled(
++                    !snapshot.busy,
++                    egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt).hint_text("描述要修改或生成的内容…").char_limit(4000).desired_width(f32::INFINITY),
++                );
++                input_rect = Some(input.rect);
++                button_rects = actions(app, ui, &snapshot);
++                if snapshot.busy {
++                    ui.horizontal(|ui| {
++                        ui.spinner();
++                        widgets::elided_label(ui, &snapshot.message, width - 65.0);
++                    });
++                } else if !snapshot.message.is_empty() {
++                    let text = egui::RichText::new(&snapshot.message).color(if snapshot.error { tokens.danger } else { tokens.text_dim });
++                    ui.add(egui::Label::new(text).truncate()).on_hover_text(&snapshot.message);
++                }
++            },
++        );
++    });
++    let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++    state.rect = Some(area.response.rect);
++    state.input = input_rect;
++    state.buttons = button_rects;
++}
++
++fn actions(app: &PhotocraftApp, ui: &mut egui::Ui, status: &Status) -> Vec<(String, Rect)> {
++    let mut buttons = Vec::new();
++    ui.horizontal(|ui| {
++        ui.add_enabled_ui(!status.busy, |ui| {
++            let has_prompt = !app.ui.codex_ai_prompt.trim().is_empty();
++            for (label, mode, enabled) in [("局部修改", "fill", has_prompt), ("移除物体", "remove", true), ("生成图片", "generate", has_prompt)] {
++                let response = ui.add_enabled_ui(enabled, |ui| widgets::secondary_button(ui, label, 76.0)).inner;
++                buttons.push((label.into(), response.rect));
++                if response.clicked() {
++                    submit(app, ui.ctx(), mode);
++                }
++            }
++        });
++        if status.busy && widgets::secondary_button(ui, "取消", 44.0).clicked() {
++            cancel(ui.ctx());
++        }
++    });
++    buttons
++}
++
++fn submit(app: &PhotocraftApp, ctx: &Context, mode: &str) {
++    let Some(doc) = app.session.active() else { return };
++    let request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,
++        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision}});
++    start(ctx, request);
++}
++
++#[cfg(target_arch = "wasm32")]
++fn available() -> bool {
++    false
++}
++#[cfg(target_arch = "wasm32")]
++fn start(_ctx: &Context, _request: Value) {}
++#[cfg(target_arch = "wasm32")]
++fn cancel(_ctx: &Context) {}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn available() -> bool {
++    std::env::var_os("PHOTOCRAFT_CODEX_TOKEN_FILE").is_some()
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn start(ctx: &Context, request: Value) {
++    let state = shared(ctx);
++    {
++        let mut status = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        if status.busy {
++            return;
++        }
++        status.busy = true;
++        status.error = false;
++        status.message = "正在读取选区…".into();
++    }
++    let ctx = ctx.clone();
++    std::thread::spawn(move || {
++        let result = native::run(&ctx, &state, request);
++        if let Err(error) = result {
++            let mut status = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++            status.busy = false;
++            status.error = true;
++            status.message = error;
++        }
++        ctx.request_repaint();
++    });
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn cancel(ctx: &Context) {
++    let ctx = ctx.clone();
++    std::thread::spawn(move || {
++        if let Err(error) = native::request("POST", "/cancel", &json!({})) {
++            let state = shared(&ctx);
++            state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).message = error;
++        }
++        ctx.request_repaint();
++    });
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++mod native {
++    use super::{Context, Shared, Value, json};
++    use std::io::{Read, Write};
++    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
++    use std::time::{Duration, Instant};
++
++    pub(super) fn request(method: &str, path: &str, body: &Value) -> Result<Value, String> {
++        let port: u16 = std::env::var("PHOTOCRAFT_CODEX_PORT").ok().and_then(|s| s.parse().ok()).ok_or("未配置本地 Codex 服务")?;
++        let token_file = std::env::var_os("PHOTOCRAFT_CODEX_TOKEN_FILE").ok_or("未配置本地认证文件")?;
++        let token = std::fs::read_to_string(token_file).map_err(|_| "无法读取本地认证文件")?;
++        let token = token.trim();
++        if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
++            return Err("本地认证文件无效".into());
++        }
++        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
++        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(3)).map_err(|e| format!("无法连接 Codex 服务：{e}"))?;
++        stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
++        stream.set_write_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
++        let body = body.to_string();
++        let wire = format!(
++            "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
++            body.len()
++        );
++        stream.write_all(wire.as_bytes()).map_err(|e| e.to_string())?;
++        let mut response = String::new();
++        stream.take(65536).read_to_string(&mut response).map_err(|e| e.to_string())?;
++        let (_, body) = response.split_once("\r\n\r\n").ok_or("Codex 服务返回了无效响应")?;
++        let value: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
++        if value.get("error").and_then(Value::as_bool) == Some(true) && value.get("busy").is_none() {
++            return Err(value.get("message").and_then(Value::as_str).unwrap_or("Codex 请求失败").into());
++        }
++        Ok(value)
++    }
++
++    pub(super) fn run(ctx: &Context, state: &Shared, body: Value) -> Result<(), String> {
++        request("POST", "/generate", &body)?;
++        let started = Instant::now();
++        loop {
++            let response = request("GET", "/state", &json!({}))?;
++            let busy = response.get("busy").and_then(Value::as_bool).unwrap_or(false);
++            {
++                let mut status = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                status.busy = busy;
++                status.message = response.get("message").and_then(Value::as_str).unwrap_or("处理中…").chars().take(1000).collect();
++                status.error = response.get("error").and_then(Value::as_bool).unwrap_or(false);
++            }
++            ctx.request_repaint();
++            if !busy {
++                return Ok(());
++            }
++            if started.elapsed() > Duration::from_secs(1200) {
++                return Err("等待生成超时，请检查本地任务日志".into());
++            }
++            std::thread::sleep(Duration::from_millis(500));
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{Context, PhotocraftApp, Rect, ViewXform, json, pos2, position, selection_rect, vec2};
++    #[test]
++    fn follows_selection_and_stays_inside_canvas() {
++        let canvas = Rect::from_min_max(pos2(50.0, 80.0), pos2(950.0, 700.0));
++        let size = vec2(560.0, 104.0);
++        let selection = Rect::from_min_max(pos2(300.0, 200.0), pos2(500.0, 300.0));
++        let normal = position(selection, canvas, size);
++        assert_eq!(normal.y, 312.0);
++        let bottom = position(selection.translate(vec2(0.0, 350.0)), canvas, size);
++        assert!(bottom.y + size.y < 550.0);
++        assert!(canvas.contains_rect(Rect::from_min_size(bottom, size)));
++    }
++    #[test]
++    fn narrow_canvas_clamps_left_and_right() {
++        let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0));
++        let size = vec2(376.0, 104.0);
++        for x in [-500.0, 0.0, 800.0] {
++            let selection = Rect::from_min_size(pos2(x, 130.0), vec2(40.0, 40.0));
++            assert!(canvas.contains_rect(Rect::from_min_size(position(selection, canvas, size), size)));
++        }
++    }
++
++    #[test]
++    fn cached_bounds_follow_revisions_and_camera_changes() {
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
++        app.run("select.rect", json!({"x": 20, "y": 30, "width": 80, "height": 60})).unwrap();
++        let ctx = Context::default();
++        let xf = ViewXform {
++            rect: Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0)),
++            zoom: 1.0,
++            center: [200.0, 150.0],
++            flip: false,
++            rotation: 0.0,
++            aspect: 1.0,
++        };
++        assert_eq!(selection_rect(&app, &ctx, xf).unwrap().width(), 80.0);
++        assert_eq!(selection_rect(&app, &ctx, ViewXform { zoom: 2.0, ..xf }).unwrap().width(), 160.0);
++        app.run("select.rect", json!({"x": 40, "y": 50, "width": 100, "height": 70})).unwrap();
++        assert_eq!(selection_rect(&app, &ctx, xf).unwrap().width(), 100.0);
++        app.run("select.deselect", json!({})).unwrap();
++        assert!(selection_rect(&app, &ctx, xf).is_none());
++    }
++}
+diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
+index 9b2140d..09b78e5 100644
+--- a/crates/ui-egui/src/control/inspect.rs
++++ b/crates/ui-egui/src/control/inspect.rs
+@@ -29,7 +29,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
+         dialogs.push(json!({"id": SHELL_DIALOG, "kind": kind, "title": crate::workspace_ui::title(kind), "fields": fields}));
+     }
+     dialogs.extend(crate::discard_ui::inspect(app));
+-    json!({
++    let mut state = json!({
+         "window": {"width": screen.width(), "height": screen.height(), "pixelsPerPoint": ctx.pixels_per_point()},
+         "tool": app.ui.tool,
+         "toolOptions": app.ui.tool_options,
+@@ -115,7 +115,11 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
+         "jobs": crate::jobs_ui::inspect(app),
+         "histogram": crate::histogram_panel::inspect(app),
+         "cameraRaw": app.camera_raw.as_ref().map(|d| d.describe(&app.ui.camera_raw_scope, &app.ui.camera_raw_preview)),
+-    })
++    });
++    if let Some(object) = state.as_object_mut() {
++        object.insert("codexAI".into(), crate::codex_ai::inspect(ctx));
++    }
++    state
+ }
+ 
+ pub fn save_screenshot(app: &mut PhotocraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index e272ddb..2e4721d 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -24,6 +24,7 @@ macro_rules! tl {
+ }
+ mod brush_mode_menu;
+ pub mod canvas;
++pub mod codex_ai;
+ pub mod control;
+ pub mod dialogs;
+ pub mod dock;
+diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
+index 060871a..bec5f14 100644
+--- a/crates/ui-egui/src/state.rs
++++ b/crates/ui-egui/src/state.rs
+@@ -204,6 +204,9 @@ pub struct DocWindow {
+ 
+ #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+ pub struct UiState {
++    /// Prompt for the optional native Codex selection toolbar.
++    #[serde(default)]
++    pub codex_ai_prompt: String,
+     pub tool: Tool,
+     /// The last tool used in each shortcut group (the tools sharing a key, [`Tool::key`]), at most
+     /// one per group: the group's key brings it back, as in Photoshop (#2608).
+@@ -514,6 +517,7 @@ pub struct UiState {
+ impl Default for UiState {
+     fn default() -> Self {
+         Self {
++            codex_ai_prompt: String::new(),
+             tool: Tool::Brush,
+             group_tools: Vec::new(),
+             spring: None,
