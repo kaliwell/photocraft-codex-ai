@@ -73,18 +73,21 @@ def stop_process(process):
 
 
 def codex_command() -> list[str]:
-    bundled = Path(__file__).resolve().parents[1] / 'tools/codex/bin/codex.exe'
-    if bundled.is_file():
-        return [str(bundled)]
     # Invoke the JS entry point directly: .ps1 may be blocked and .cmd needs a shell.
-    npm = Path(os.environ.get('APPDATA', '')) / 'npm/node_modules/@openai/codex/bin/codex.js'
     node = shutil.which('node')
-    if node and npm.is_file():
-        return [node, str(npm)]
+    entries = [Path(os.environ.get('APPDATA', '')) / 'npm/node_modules/@openai/codex/bin/codex.js']
+    for name in ('codex.cmd', 'codex.ps1', 'codex'):
+        shim = shutil.which(name)
+        if shim:
+            entries.append(Path(shim).parent / 'node_modules/@openai/codex/bin/codex.js')
+    if node:
+        for entry in entries:
+            if entry.is_file():
+                return [node, str(entry)]
     binary = shutil.which('codex.exe') or shutil.which('codex')
     if binary and Path(binary).suffix.lower() not in ('.cmd', '.ps1', '.bat'):
         return [binary]
-    raise RuntimeError('未找到 Codex CLI。请安装并运行 codex login。')
+    raise RuntimeError('未找到本机 Codex CLI。请安装 Node.js 后运行 npm.cmd install -g @openai/codex，再重新启动。')
 
 
 def codex_environment(config: Path | None = None) -> tuple[dict[str, str], bool]:

@@ -13,8 +13,6 @@ ROOT = Path(__file__).resolve().parent
 def main():
     os.chdir(ROOT)
     env, _ = codex_environment()
-    tools = ROOT / 'tools/codex'
-    env['PATH'] = os.pathsep.join((str(tools / 'bin'), str(tools / 'codex-path'), env.get('PATH', '')))
     flags = subprocess.CREATE_NO_WINDOW
     status = subprocess.run(codex_command() + ['login', 'status'], env=env, capture_output=True,
                             creationflags=flags)

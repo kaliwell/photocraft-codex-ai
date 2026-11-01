@@ -1,4 +1,12 @@
-# PhotoCraft · Codex AI 0.2.6 — 原生选区工具栏
+# PhotoCraft · Codex AI 0.2.7 — 原生选区工具栏
+
+**本地 Node.js 版：** [下载 v0.2.7](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.7)，
+选择 `photocraft-codex-ai-0.2.7-windows-x64-local-node.zip`，完整解压后双击 `start.cmd`。
+本版保留内置 Python/Pillow 和 PhotoCraft，**不打包 Node.js 或 Codex CLI**，优先使用本机 Node.js
+运行 npm 已安装的 Codex，支持自定义 npm 安装目录。已有登录可直接使用；尚未登录时按提示登录。
+若只有 Node.js 而没有 Codex，先执行一次 `npm.cmd install -g @openai/codex`。
+
+以下保留旧版信息；0.2.6 是含 Codex 的旧整合包，0.2.7 改用电脑本地安装。
 
 **免安装整合包：** [下载 Windows x64 便携版](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.6)，
 选择 `photocraft-codex-ai-0.2.6-windows-x64-portable.zip`，完整解压后双击 `start.cmd`。

@@ -1,5 +1,12 @@
 # 本机验证记录
 
+## 0.2.7 使用本地 Node.js/Codex
+
+- 删除构建流程中的 Codex 程序和资源复制步骤，发布包不含 Node.js、Codex CLI 或 tools 目录。
+- 优先通过本机 node.exe 执行 npm 安装的 codex.js，同时识别 PATH 上 Codex 命令所在的自定义 npm 前缀。
+- 保留内置 Python 3.13.5/Pillow 11.3.0 和 PhotoCraft；缺少本机 Codex 时显示明确的安装命令。
+- 33 项测试通过，新增本地 Node.js/自定义 npm 前缀识别以及缺失 Codex 的错误提示覆盖。
+
 ## 0.2.6 Windows x64 免安装整合包
 
 - 内置官方 CPython 3.13.5 embeddable、Pillow 11.3.0 wheel、Codex CLI 0.166.0 原生程序及沙箱/命令辅助程序，不依赖系统 Python 或 Node.js。

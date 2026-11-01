@@ -8,7 +8,8 @@ Upstream commit: `84f904dca2d1eaf6b506b3b8a7043e3ea116e482`.
 License: [vendor/OPENFILL-LICENSE](vendor/OPENFILL-LICENSE).
 Copyright and SPDX headers are preserved. Local transport modifications are documented in that file.
 
-The source bundle expects a separately installed Codex CLI. The Windows x64 portable
+Version 0.2.7 expects a locally installed Node.js/Codex CLI and does not redistribute them.
+The legacy 0.2.6 Windows x64 portable
 bundle additionally includes Codex CLI 0.166.0 (Apache-2.0), its command/sandbox helpers,
 and ripgrep. Their license texts are included under `tools/codex/`.
 Codex upstream: https://github.com/openai/codex/tree/rust-v0.166.0
