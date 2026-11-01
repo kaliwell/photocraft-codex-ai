@@ -1,3 +1,161 @@
+diff --git a/crates/engine/src/cmd/layer_mask_props_cmds.rs b/crates/engine/src/cmd/layer_mask_props_cmds.rs
+index 64a088e..c8e8d15 100644
+--- a/crates/engine/src/cmd/layer_mask_props_cmds.rs
++++ b/crates/engine/src/cmd/layer_mask_props_cmds.rs
+@@ -1,6 +1,9 @@
+ //! Non-destructive pixel-mask properties: density and feather leave the mask pixels intact.
+ 
+-use photocraft_doc::LayerId;
++use photocraft_color::{ColorMode, PixelFormat};
++use photocraft_doc::{LayerId, LayerMask};
++use photocraft_geom::Rect;
++use photocraft_raster::Surface;
+ use serde_json::{Value, json};
+ 
+ use crate::commands::CommandSpec;
+@@ -29,8 +32,12 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+     }
+     let density = number(p, "density", 100.0)?.map(|d| d / 100.0);
+     let feather = number(p, "feather", 1000.0)?;
+-    if density.is_none() && feather.is_none() {
+-        return Err(bad("density or feather is required"));
++    let shape = p
++        .get("shape")
++        .map(|v| v.as_str().filter(|s| matches!(*s, "selection" | "circle" | "square")).ok_or_else(|| bad("shape must be selection, circle or square")))
++        .transpose()?;
++    if density.is_none() && feather.is_none() && shape.is_none() {
++        return Err(bad("density, feather or shape is required"));
+     }
+     let st = s.active().ok_or(EngineError::NoDocument)?;
+     if let Some(document) = p.get("document")
+@@ -43,11 +50,20 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+         None => st.active_layer.ok_or_else(|| bad("no layer given and no active layer"))?,
+     };
+     let layer = st.doc.layer(id).ok_or(EngineError::NoLayer(id))?;
+-    let mask = layer.mask.as_ref().ok_or_else(|| bad("the target layer has no pixel mask"))?;
+-    let (density, feather) = (density.unwrap_or(mask.density), feather.unwrap_or(mask.feather));
+-    if (density, feather) != (mask.density, mask.feather) {
++    if layer.mask.is_none() && shape.is_none() {
++        return Err(bad("the target layer has no pixel mask"));
++    }
++    let replacement = shape.map(|kind| centered_mask(layer, st.doc.bounds(), kind)).transpose()?;
++    let (old_density, old_feather) = layer.mask.as_ref().map_or((1.0, 0.0), |m| (m.density, m.feather));
++    let (density, feather) = (density.unwrap_or(old_density), feather.unwrap_or(old_feather));
++    if replacement.is_some() || (density, feather) != (old_density, old_feather) {
+         s.edit("Edit Layer Mask", |doc, _| {
+             let layer = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
++            if let Some(surface) = replacement {
++                let mask = layer.mask.get_or_insert_with(LayerMask::reveal_all);
++                mask.surface = surface;
++                mask.enabled = true;
++            }
+             let mask = layer.mask.as_mut().ok_or_else(|| bad("the target layer has no pixel mask"))?;
+             (mask.density, mask.feather) = (density, feather);
+             Ok(())
+@@ -56,13 +72,54 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+     Ok(json!({"layer": id.0, "density": density * 100.0, "feather": feather}))
+ }
+ 
++/// Build the center from the original pixel coverage, never from a previously shaped mask.
++fn centered_mask(layer: &photocraft_doc::Layer, canvas: Rect, shape: &str) -> Result<Surface> {
++    let source = layer.surface().ok_or_else(|| bad("a pixel layer is required"))?;
++    let area = photocraft_compose::bounds::content_bounds(source).intersect(&canvas);
++    if u64::from(area.width()) * u64::from(area.height()) > 64_000_000 {
++        return Err(bad("mask area exceeds 64 million pixels"));
++    }
++    let format = source.format();
++    let mut support = Surface::new(PixelFormat::new(ColorMode::Grayscale, format.sample, false));
++    for y in area.y0..area.y1 {
++        for x in area.x0..area.x1 {
++            if !format.alpha || source.sample_channel(x, y, format.channels().saturating_sub(1)) > 0.0 {
++                support.write_pixel(x, y, &[1.0]);
++            }
++        }
++    }
++    let bounds = support.content_bounds();
++    if bounds.is_empty() {
++        return Err(bad("the layer contains no visible pixels"));
++    }
++    if shape == "selection" {
++        return Ok(support);
++    }
++    let cx = (f64::from(bounds.x0) + f64::from(bounds.x1)) / 2.0;
++    let cy = (f64::from(bounds.y0) + f64::from(bounds.y1)) / 2.0;
++    let radius = f64::from(bounds.width().min(bounds.height())) / 2.0;
++    let mut mask = Surface::new(PixelFormat::new(ColorMode::Grayscale, format.sample, false));
++    for y in bounds.y0..bounds.y1 {
++        for x in bounds.x0..bounds.x1 {
++            let dx = (f64::from(x) + 0.5 - cx).abs();
++            let dy = (f64::from(y) + 0.5 - cy).abs();
++            let distance = if shape == "circle" { dx.hypot(dy) } else { dx.max(dy) };
++            let coverage = (radius + 0.5 - distance).clamp(0.0, 1.0) as f32;
++            if coverage > 0.0 && support.sample_channel(x, y, 0) > 0.0 {
++                mask.write_pixel(x, y, &[coverage]);
++            }
++        }
++    }
++    Ok(mask)
++}
++
+ pub fn specs() -> Vec<CommandSpec> {
+     vec![CommandSpec {
+         id: EDIT,
+         label: "Edit Layer Mask",
+         menu: &[],
+         shortcut: None,
+-        params: r##"{"layer":id? (default active),"document":id? (reject a stale dialog),"density":0..100?,"feather":0..1000? (pixels)} → {layer,density,feather}; at least one property required; mask pixels are preserved"##,
++        params: r##"{"layer":id?,"document":id?,"density":0..100?,"feather":0..1000?,"shape":"selection|circle|square"?} → {layer,density,feather}; shape creates/replaces a centered mask from original pixel coverage; property-only edits preserve mask pixels"##,
+         enabled: |s| s.active().map(|_| ()).ok_or_else(|| "no document open".into()),
+         run: edit,
+         journal: true,
+diff --git a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
+index cd32de1..36aaf36 100644
+--- a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
++++ b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
+@@ -7,6 +7,43 @@ use photocraft_raster::Surface;
+ 
+ use super::*;
+ 
++#[test]
++fn centered_shapes_preserve_pixels_selection_and_restore_with_history_at_all_depths() {
++    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
++        let mut doc = Document::new("AI mask", Size::new(80, 60), ColorMode::Rgb, depth);
++        let mut layer = Layer::raster("Generated", doc.pixel_format());
++        layer.surface_mut().unwrap().fill_rect(Rect::new(20, 10, 60, 50), &[0.2, 0.4, 0.8, 1.0]);
++        let id = layer.id;
++        let pixels = layer.surface().unwrap().clone();
++        doc.layers.push(layer);
++        doc.selection = Some(Surface::with_default(PixelFormat::GRAY8, &[0.25]));
++        let selection = doc.selection.clone();
++        let mut s = Session::new();
++        s.add_document(doc, None);
++        s.execute(EDIT, json!({"layer": id.0, "shape": "circle", "feather": 12})).unwrap();
++        let circle = s.active().unwrap().doc.layer(id).unwrap().mask.as_ref().unwrap().clone();
++        assert_eq!(circle.surface.sample_channel(20, 10, 0), 0.0);
++        assert_eq!(circle.surface.sample_channel(40, 30, 0), 1.0);
++        s.execute(EDIT, json!({"layer": id.0, "shape": "square"})).unwrap();
++        let square = s.active().unwrap().doc.layer(id).unwrap().mask.as_ref().unwrap().clone();
++        assert_eq!(square.surface.sample_channel(20, 10, 0), 1.0);
++        assert_eq!(square.feather, 12.0);
++        s.execute("edit.undo", json!({})).unwrap();
++        assert_eq!(s.active().unwrap().doc.layer(id).unwrap().mask.as_ref(), Some(&circle));
++        s.execute("edit.redo", json!({})).unwrap();
++        s.execute(EDIT, json!({"layer": id.0, "shape": "selection", "feather": 0})).unwrap();
++        let current = s.active().unwrap();
++        assert_eq!(current.doc.layer(id).unwrap().surface(), Some(&pixels));
++        assert_eq!(current.doc.selection, selection);
++        assert_eq!(current.doc.layer(id).unwrap().mask.as_ref().unwrap().feather, 0.0);
++        let revision = current.revision;
++        for shape in [json!("triangle"), json!(null), json!(5)] {
++            assert!(s.execute(EDIT, json!({"layer": id.0, "shape": shape})).is_err());
++            assert_eq!(s.active().unwrap().revision, revision);
++        }
++    }
++}
++
+ fn session(depth: SampleType, adjustment: bool) -> (Session, LayerId, LayerId) {
+     let mut doc = Document::new("Masks", Size::new(8, 8), ColorMode::Rgb, depth);
+     let background = Layer::raster("Unmasked", doc.pixel_format());
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
 index da59b5a..efecea0 100644
 --- a/crates/ui-egui/src/canvas.rs
@@ -14,10 +172,10 @@ index da59b5a..efecea0 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 0000000..cd80313
+index 0000000..32facf4
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,305 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use egui::{Context, Rect, Vec2, pos2, vec2};
@@ -52,6 +210,7 @@ index 0000000..cd80313
 +    let state = shared(ctx);
 +    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +    json!({"busy": state.busy, "message": state.message, "error": state.error,
++           "maskFeatherMenu": crate::layer_menu_ui::inspect_feather_menu(ctx),
 +           "rect": state.rect.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "input": state.input.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "buttons": state.buttons.iter().map(|(label, r)| json!({"label": label, "rect": [r.min.x, r.min.y, r.width(), r.height()]})).collect::<Vec<_>>()})
@@ -360,6 +519,134 @@ index e272ddb..2e4721d 100644
  pub mod control;
  pub mod dialogs;
  pub mod dock;
+diff --git a/crates/ui-egui/src/panels/layer_menu_ui.rs b/crates/ui-egui/src/panels/layer_menu_ui.rs
+index f274e28..6f84fa9 100644
+--- a/crates/ui-egui/src/panels/layer_menu_ui.rs
++++ b/crates/ui-egui/src/panels/layer_menu_ui.rs
+@@ -147,6 +147,10 @@ pub fn show(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, on_set: bo
+     crate::widgets::menu_scroll(ui, |ui| {
+         ui.set_min_width(220.0);
+         let mut rename = false;
++        if !on_set && l.surface().is_some() {
++            feather_menu(app, ui, l, actions);
++            ui.separator();
++        }
+         let has_selection = app.session.active().is_some_and(|s| s.doc.selection.is_some());
+         items(app, ui, l, on_set, entries(l, on_set, has_selection), actions);
+         ui.separator();
+@@ -165,6 +169,8 @@ pub fn show_mask(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, actio
+     let Some(mask) = &l.mask else { return };
+     crate::widgets::menu_scroll(ui, |ui| {
+         ui.set_min_width(220.0);
++        feather_menu(app, ui, l, actions);
++        ui.separator();
+         let edits = vec![
+             Some((tl!(mask_toggle_label(mask.enabled)), "layer.layerMask.enabled")),
+             Some((tl!("Delete Layer Mask"), "layer.layerMask.delete")),
+@@ -200,6 +206,74 @@ pub fn show_mask(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, actio
+     });
+ }
+ 
++fn feather_menu(app: &crate::PhotocraftApp, ui: &mut egui::Ui, layer: &Layer, actions: &mut Vec<(String, Value)>) {
++    let Some(document) = app.session.active().map(|s| s.doc.id.0) else { return };
++    let mut controls = json!({"layer": layer.id.0});
++    let label = |english, chinese| if crate::i18n::current().code().starts_with("zh") { chinese } else { english };
++    let config = egui::containers::menu::MenuConfig::new().close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
++    let (menu, _) = egui::containers::menu::SubMenuButton::new(label("Edge Feather", "边缘羽化")).config(config).ui(ui, |ui| {
++        ui.set_width(280.0);
++        ui.label(label("Centered on original pixel coverage", "以原始像素选区为中心"));
++        ui.horizontal(|ui| {
++            for (text, shape) in [(label("Original", "原选区"), "selection"), (label("Circle", "圆形"), "circle"), (label("Square", "正方形"), "square")]
++            {
++                let response = ui.button(text);
++                controls[shape] = json!([response.rect.min.x, response.rect.min.y, response.rect.width(), response.rect.height()]);
++                if response.clicked() {
++                    actions.push(("layer.layerMask.edit".into(), json!({"document": document, "layer": layer.id.0, "shape": shape})));
++                }
++            }
++        });
++        let mut feather = layer.mask.as_ref().map_or(0.0, |m| m.feather);
++        let gesture_key = ui.scope_id().with((document, layer.id, "feather-gesture"));
++        let pressed = ui.input(|i| i.pointer.any_pressed());
++        let gesture = ui.data_mut(|data| {
++            let value = data.get_temp_mut_or_default::<u64>(gesture_key);
++            if pressed {
++                *value = value.wrapping_add(1);
++            }
++            *value
++        });
++        let response = crate::widgets::slider_row_with(
++            ui,
++            label("Feather", "羽化"),
++            &mut feather,
++            0.0..=1000.0,
++            "px",
++            None,
++            crate::widgets::RowGestures { curve: Some(3.0), ..Default::default() },
++        );
++        controls["slider"] = json!([response.rect.min.x, response.rect.min.y, response.rect.width(), response.rect.height()]);
++        controls["feather"] = json!(feather);
++        if response.changed() {
++            let mut params = json!({"document": document, "layer": layer.id.0, "feather": feather,
++                "coalesce": format!("mask-context:{document}:{}:{gesture}", layer.id.0)});
++            if layer.mask.is_none() {
++                params["shape"] = json!("selection");
++            }
++            actions.push(("layer.layerMask.edit".into(), params));
++            if !ui.input(|i| i.pointer.any_down()) {
++                ui.data_mut(|data| {
++                    let value = data.get_temp_mut_or_default::<u64>(gesture_key);
++                    *value = value.wrapping_add(1);
++                });
++            }
++        }
++        ui.label(
++            egui::RichText::new(label("0 restores hard edges; mask only", "调到 0 可恢复硬边；只改变蒙版")).color(crate::theme::Tokens::get(ui.ctx()).text_dim),
++        );
++    });
++    controls["menu"] = json!([menu.rect.min.x, menu.rect.min.y, menu.rect.width(), menu.rect.height()]);
++    controls["pass"] = json!(ui.ctx().cumulative_pass_nr());
++    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("mask-feather-menu"), controls));
++}
++
++pub(crate) fn inspect_feather_menu(ctx: &egui::Context) -> Value {
++    ctx.data(|d| d.get_temp::<Value>(egui::Id::unique("mask-feather-menu")))
++        .filter(|v| v.get("pass").and_then(Value::as_u64).is_some_and(|pass| ctx.cumulative_pass_nr().saturating_sub(pass) <= 1))
++        .unwrap_or(Value::Null)
++}
++
+ /// Render the layer style menu of `l`'s effect rows ([`effects_entries`]); the actions select `l`
+ /// first when it isn't the active layer.
+ pub fn show_effects(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, actions: &mut Vec<(String, Value)>) {
+diff --git a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
+index a7ab70a..3acdcc9 100644
+--- a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
++++ b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
+@@ -1,5 +1,24 @@
+ use super::*;
+ 
++#[test]
++fn pixel_layer_context_exposes_feather_menu_for_automation() {
++    let mut session = photocraft_engine::Session::new();
++    session.execute("file.new", json!({"width": 32, "height": 32})).unwrap();
++    let app = crate::PhotocraftApp::new(session, Default::default());
++    let st = app.session.active().unwrap();
++    let layer = st.doc.layer(st.active_layer.unwrap()).unwrap().clone();
++    let ctx = egui::Context::default();
++    let mut actions = Vec::new();
++    let mut output = ctx.run_ui(Default::default(), |ui| {
++        feather_menu(&app, ui, &layer, &mut actions);
++    });
++    output.textures_delta.clear();
++    let controls = inspect_feather_menu(&ctx);
++    assert_eq!(controls["layer"].as_u64(), Some(layer.id.0));
++    assert!(controls["menu"].is_array());
++    assert!(actions.is_empty());
++}
++
+ #[test]
+ fn mask_toggle_label_follows_history_and_selected_layer() {
+     let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
 index 060871a..bec5f14 100644
 --- a/crates/ui-egui/src/state.rs

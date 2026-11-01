@@ -137,13 +137,16 @@ class Service:
                               d['name'] == prepared.target.name), None)
                 if not match or int(match.get('revision', 0)) != prepared.revision:
                     raise RuntimeError('原文档已改变或关闭。结果已保存，未导入；请撤销改动后重试，或手动导入。')
-                blend_mask = inward_feather(prepared.mask, prepared.feather_px)
-                blend_mask.save(prepared.job / 'blend-mask.png')
-                layer = clipped_layer(image, blend_mask)
+                # Original coverage stays in alpha; a separate native mask provides editable
+                # feather. Hard support guarantees the selection's exterior stays untouched.
+                support = prepared.mask.point([0] + [255] * 255)
+                prepared.mask.save(prepared.job / 'blend-mask.png')
+                layer = clipped_layer(image, prepared.mask)
             output = prepared.job / 'layer.png'
             layer.save(output)
             b.insert_results(prepared.target, [output.read_bytes()], Rect(0, 0, *prepared.size),
-                             'Codex AI · ' + prepared.prompt[:40], 0, None, use_selection_mask=False)
+                             'Codex AI · ' + prepared.prompt[:40], feather=prepared.feather_px,
+                             temp_dir=None, use_selection_mask=True, mask_pixels=support.tobytes())
             # No automatic mutation retry: a lost acknowledgement must not insert twice.
             b.commit(prepared.target)
             return prepared.target

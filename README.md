@@ -1,4 +1,18 @@
-# PhotoCraft · Codex AI 0.2.8 — 原生选区工具栏
+# PhotoCraft · Codex AI 0.2.9 — 原生选区工具栏
+
+[下载 v0.2.9](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.9)：
+`photocraft-codex-ai-0.2.9-windows-x64-local-node.zip`。
+
+**可调蒙版羽化：** 右键 AI 结果图层 → **边缘羽化**，选择原选区、居中圆形或正方形，
+拖动 **0–1000 px** 滑条（也可输入数值）。中心来自图层的原始像素覆盖范围；普通 AI 结果通常对应生成时的选区，透明结果按实际像素范围计算。
+新 AI 图层保存独立蒙版，调整不重新生图，支持撤销/重做，保存 `.pcraft` 后保留。
+生成图片默认 0 羽化，局部修改/移除物体默认 12 px；新版可随时调整。
+旧版本已经烘焙到像素里的软边无法通过该滑条反向还原。
+更新前先保存并关闭旧版窗口，解压新版后启动 `start.cmd`。
+
+[右键操作示意](examples/editable-mask-menu.png) · [可编辑蒙版示例文档](examples/editable-mask-demo.pcraft)
+
+以下保留历史版本说明。
 
 [下载 v0.2.8 本地 Node.js 版](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.8)。
 修复图片已生成但 Windows 拒绝启动复制命令、无法导回编辑器的问题。

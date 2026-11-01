@@ -3,7 +3,7 @@ from http.server import ThreadingHTTPServer
 import threading
 import unittest
 from unittest.mock import Mock
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, ProxyHandler
 from urllib.error import HTTPError
 
 from photocraft_ai.native import NativeWorker, handler
@@ -17,6 +17,7 @@ class NativeHttpTests(unittest.TestCase):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base = f'http://127.0.0.1:{self.server.server_port}'
+        self.opener = build_opener(ProxyHandler({}))
 
     def tearDown(self):
         self.server.shutdown()
@@ -30,7 +31,7 @@ class NativeHttpTests(unittest.TestCase):
         if origin:
             headers['Origin'] = origin
         request = Request(self.base + path, data=None if data is None else json.dumps(data).encode(), headers=headers)
-        return urlopen(request, timeout=3)
+        return self.opener.open(request, timeout=3)
 
     def test_authentication_is_required_before_any_job_starts(self):
         self.worker.submit = Mock()

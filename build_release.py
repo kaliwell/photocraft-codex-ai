@@ -3,7 +3,7 @@ from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parent
-destination = root / 'dist/photocraft-codex-ai-0.2.5.zip'
+destination = root / 'dist/photocraft-codex-ai-0.2.9.zip'
 destination.parent.mkdir(exist_ok=True)
 files = [root / name for name in ('README.md', 'VALIDATION.md', 'THIRD_PARTY.md', 'RELEASE_NOTES.md',
                                  'requirements.txt', 'start.cmd', 'start-native.cmd', 'start-panel.cmd',

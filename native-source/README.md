@@ -3,8 +3,9 @@
 基线：`storytold/photocraft`，版本 0.18.0，提交
 `422ca7beda90d927643bcd074646ebbd37706d75`。
 
-修改仅涉及 `crates/ui-egui`：选区下方的 egui 工具栏、可序列化的提示词状态、
-后台本地请求及 `ui.inspect.codexAI` 的状态和按钮坐标。
+修改涉及 `crates/ui-egui` 和 `crates/engine`：选区下方的 egui 工具栏、可序列化的提示词状态、
+后台本地请求、图层右键羽化控制，以及 `layer.layerMask.edit` 的居中圆形/正方形蒙版参数。
+`ui.inspect.codexAI.maskFeatherMenu` 提供菜单与控件坐标，供界面测试使用。
 图像导出、选区、图层和撤销仍通过已有引擎命令完成。
 
 在项目根目录准备源码（本机已经完成）：

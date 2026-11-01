@@ -1,5 +1,7 @@
 """Build the modified native editor without replacing the installed PhotoCraft."""
 from pathlib import Path
+import hashlib
+import json
 import shutil
 import subprocess
 
@@ -14,4 +16,10 @@ output.mkdir(exist_ok=True)
 shutil.copy2(source / 'target/debug/photocraft.exe', output / 'photocraft.exe')
 for name in ('LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md'):
     shutil.copy2(source / name, output / name)
+info = {'version': 'development', 'photocraft_version': '0.18.0',
+        'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
+        'profile': 'development',
+        'exe_sha256': hashlib.sha256((output / 'photocraft.exe').read_bytes()).hexdigest(),
+        'patch_sha256': hashlib.sha256((ROOT / 'native-source/photocraft-codex.patch').read_bytes()).hexdigest()}
+(output / 'BUILD_INFO.json').write_text(json.dumps(info, indent=2), encoding='utf-8')
 print(output / 'photocraft.exe')

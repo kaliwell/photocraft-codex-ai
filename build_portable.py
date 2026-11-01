@@ -6,7 +6,7 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = '0.2.8'
+VERSION = '0.2.9'
 output = ROOT / f'dist/photocraft-codex-ai-{VERSION}-windows-x64-local-node'
 output.mkdir(parents=True, exist_ok=False)
 python = output / 'python'
@@ -19,6 +19,10 @@ with zipfile.ZipFile(wheel) as archive:
 (python / 'python313._pth').write_text('python313.zip\n.\n..\nLib/site-packages\nimport site\n', encoding='utf-8')
 for folder in ('photocraft_ai', 'vendor', 'native'):
     shutil.copytree(ROOT / folder, output / folder, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+build_info = json.loads((output / 'native/BUILD_INFO.json').read_text())
+build_info['version'] = VERSION
+assert build_info['exe_sha256'] == hashlib.sha256((output / 'native/photocraft.exe').read_bytes()).hexdigest()
+(output / 'native/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')
 for name in ('portable_launcher.py', 'README.md', 'THIRD_PARTY.md', 'VALIDATION.md', 'RELEASE_NOTES.md'):
     shutil.copy2(ROOT / name, output / name)
 command = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0python\\python.exe" "%~dp0portable_launcher.py" %*\r\n'
@@ -33,7 +37,9 @@ command = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0python\\python
     '需要网络及支持内置生图的 Codex 账号。包内不含任何账号登录信息。\n'
     '需要代理时：创建 runtime 文件夹，将 proxy-example.json 复制为 runtime/codex-proxy.json，修改为自己的 HTTP/混合端口。\n'
     '账号登录可随时运行 login.cmd。错误日志在 runtime/launcher.log。\n'
-    '生成图片不附加羽化；局部修改和移除物体保留 12 像素羽化。\n', encoding='utf-8-sig')
+    '生成图片默认 0 羽化；局部修改和移除物体默认 12 像素。\n'
+    '右键 AI 结果图层 -> 边缘羽化：选择原选区/圆形/正方形，拖动羽化滑条（0-1000 px）。\n'
+    '新图层使用可编辑蒙版，保存 .pcraft 后保留参数。旧图层已烘焙的软边不能反向恢复。\n', encoding='utf-8-sig')
 manifest = {str(p.relative_to(output).as_posix()): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in output.rglob('*') if p.is_file()}
 (output / 'FILES-SHA256.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
