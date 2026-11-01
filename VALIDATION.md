@@ -1,5 +1,12 @@
 # 本机验证记录
 
+## 0.2.8 直接接收生成结果
+
+- 用户失败任务实际已生成 PNG，失败发生在 Windows `CreateProcessAsUserW` 启动复制命令阶段（错误 5）。
+- 已找回该任务生成文件，核对原文档名称和 revision 后按原始选区及羽化参数导入新图层，未重新请求生图。
+- 后台直接从当前 thread.started 对应的 generated_images 会话目录接收完整 PNG；UUID 校验、目录边界检查，多个有效候选时不猜测，不接受不完整 PNG，原有沙箱不变。
+- 35 项测试通过，覆盖 CLI 复制命令失败退出时的结果接收、目录范围、PNG 完整性和歧义结果拒绝。
+
 ## 0.2.7 使用本地 Node.js/Codex
 
 - 删除构建流程中的 Codex 程序和资源复制步骤，发布包不含 Node.js、Codex CLI 或 tools 目录。

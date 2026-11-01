@@ -1,4 +1,11 @@
-# PhotoCraft · Codex AI 0.2.7 — 原生选区工具栏
+# PhotoCraft · Codex AI 0.2.8 — 原生选区工具栏
+
+[下载 v0.2.8 本地 Node.js 版](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.8)。
+修复图片已生成但 Windows 拒绝启动复制命令、无法导回编辑器的问题。
+插件现在直接接收本次 Codex 会话生成的 PNG，不再要求 Codex 调用 PowerShell 复制；保留原有沙箱设置。
+只读取本次会话目录中的完整 PNG，不扫描历史会话，也不读取描述中任意指定的文件。
+
+以下保留历史版本说明，建议下载最新 v0.2.8。
 
 **本地 Node.js 版：** [下载 v0.2.7](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.7)，
 选择 `photocraft-codex-ai-0.2.7-windows-x64-local-node.zip`，完整解压后双击 `start.cmd`。
