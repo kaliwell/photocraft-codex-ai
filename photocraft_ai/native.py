@@ -175,9 +175,8 @@ if __name__ == '__main__':
         RUNTIME.mkdir(exist_ok=True)
         import traceback
         (RUNTIME / 'native-worker-error.log').write_text(traceback.format_exc(), encoding='utf-8')
-        import tkinter as tk
-        from tkinter import messagebox
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showerror('PhotoCraft Codex AI', str(error))
-        root.destroy()
+        if os.name == 'nt':
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, str(error), 'PhotoCraft Codex AI', 0x10)
+        else:
+            raise

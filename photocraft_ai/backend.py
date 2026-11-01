@@ -73,6 +73,9 @@ def stop_process(process):
 
 
 def codex_command() -> list[str]:
+    bundled = Path(__file__).resolve().parents[1] / 'tools/codex/bin/codex.exe'
+    if bundled.is_file():
+        return [str(bundled)]
     # Invoke the JS entry point directly: .ps1 may be blocked and .cmd needs a shell.
     npm = Path(os.environ.get('APPDATA', '')) / 'npm/node_modules/@openai/codex/bin/codex.js'
     node = shutil.which('node')

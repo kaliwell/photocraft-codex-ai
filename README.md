@@ -1,4 +1,13 @@
-# PhotoCraft · Codex AI 0.2.5 — 原生选区工具栏
+# PhotoCraft · Codex AI 0.2.6 — 原生选区工具栏
+
+**免安装整合包：** [下载 Windows x64 便携版](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.6)，
+选择 `photocraft-codex-ai-0.2.6-windows-x64-portable.zip`，完整解压后双击 `start.cmd`。
+已包含 PhotoCraft、Python、Pillow 和 Codex CLI，无需另装 Python、Node.js 或运行 pip。
+首次按提示在浏览器登录自己的 Codex/ChatGPT 账号；之后直接启动即可。
+仍需网络和支持内置生图的账号。整合包不包含任何账号凭据、任务记录或本机代理设置。
+需要代理时按包内 `使用说明.txt` 配置；重新登录可运行 `login.cmd`。
+
+以下是旧版源码/需自行安装依赖的包说明；使用 0.2.6 便携版可跳过环境安装步骤。
 
 [下载 Windows 集成版](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.5)：
 选择 `photocraft-codex-ai-0.2.5.zip`，完整解压后运行 `start.cmd`。

@@ -1,4 +1,14 @@
-# PhotoCraft Codex AI v0.2.5
+# PhotoCraft Codex AI v0.2.6 · Windows x64 免安装整合包
+
+下载 `photocraft-codex-ai-0.2.6-windows-x64-portable.zip`，完整解压后双击 `start.cmd`。
+包含 PhotoCraft、Python 3.13.5、Pillow 11.3.0 和 Codex CLI 0.166.0，无需另装 Python、Node.js 或 Codex。
+首次使用按提示登录自己的 Codex/ChatGPT 账号；仍需网络和支持内置生图的账号。
+不包含账号凭据、代理配置或任务记录。需要代理时参照包内 `使用说明.txt`。
+
+模拟移除 PATH 中的 Python/Node.js、使用空白 Codex 配置目录验证组件自检及 31 项测试通过。
+未在另一台全新 Windows 设备完成实机验收。此版本为试用开发构建。
+
+下面保留 v0.2.5 功能说明；其中手动安装依赖仅适用于旧版源码包。
 
 在 PhotoCraft 软件内、选区下方直接使用 Codex AI：局部修改、移除物体和生成图片。
 
