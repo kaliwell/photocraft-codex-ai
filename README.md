@@ -10,6 +10,8 @@
 
 v0.3.0 将配套编辑器升级到 PhotoCraft 0.19.0，保留 AI 工具栏、直接图片回传与可调蒙版羽化。
 
+当前源码另含尚未发布的修复：边缘羽化向选区内部渐隐到完全透明，生成完成后显示本次总耗时。已有图层重新调整羽化滑条即可应用新模式；下载的 v0.3.0 包尚不包含这些改动。
+
 在 PhotoCraft 编辑器内部，通过选区下方的原生工具栏进行**局部修改、移除物体和生成图片**。使用本机 Codex CLI 的内置生图能力及已有登录，生成结果自动添加为新图层，支持撤销。
 
 ### 下载与启动
@@ -95,6 +97,8 @@ python tests/smoke_photocraft.py
 ## English
 
 v0.3.0 upgrades the matching editor to PhotoCraft 0.19.0 while retaining AI tools, direct image receipt, and editable mask feathering.
+
+Current source also includes unreleased changes: feathering fades inward to full transparency at the boundary, and successful generation shows its total elapsed time. Adjust an existing layer's feather slider to apply the new mode. The v0.3.0 download does not include these changes yet.
 
 Use **Edit selection, Remove object, and Generate image** directly inside PhotoCraft, from a native toolbar next to your selection. The integration uses your locally installed Codex CLI, its built-in image generation tool, and your existing sign-in. Results are imported as new layers with undo support.
 

@@ -23,6 +23,6 @@ class PhotoCraftBridge(_Bridge):
     def _add_mask(self, scratch, layer_id, kind, grow, feather, mask_doc, mask_layer):
         super()._add_mask(scratch, layer_id, kind, grow, 0 if kind == 'pixels' else feather, mask_doc, mask_layer)
         if kind == 'pixels' and feather:
-            self.client.run('layer.layerMask.edit', layer=layer_id, feather=feather)
+            self.client.run('layer.layerMask.edit', layer=layer_id, feather=feather, inward=True)
 
 __all__ = ['PhotoCraftBridge', 'BridgeError', 'ControlClient', 'ControlError', 'Rect']

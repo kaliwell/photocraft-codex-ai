@@ -11,7 +11,12 @@ patch = subprocess.check_output(['git', 'diff', '--binary', 'HEAD', '--',
     'crates/ui-egui/src/state.rs', 'crates/ui-egui/src/panels/layer_menu_ui.rs',
     'crates/ui-egui/src/panels/layer_menu_ui/tests.rs',
     'crates/engine/src/cmd/layer_mask_props_cmds.rs',
-    'crates/engine/src/cmd/layer_mask_props_cmds/tests.rs'], cwd=source)
+    'crates/engine/src/cmd/layer_mask_props_cmds/tests.rs',
+    'crates/doc/src/lib.rs', 'crates/compose', 'crates/format', 'crates/io',
+    'crates/engine/src/cmd/smart_cmds/filters.rs',
+    'crates/engine/src/cmd/smart_svg_cmds/tests.rs',
+    'crates/engine/src/cmd/smartselect_cmds/tests.rs',
+    'crates/ui-egui/src/dialogs/adjust_preview.rs'], cwd=source)
 destination = root / 'native-source/photocraft-codex.patch'
 destination.write_bytes(patch)
 print(destination)

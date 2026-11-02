@@ -15,13 +15,20 @@ subprocess.run(['cargo', 'build', '--locked', '-p', 'photocraft', '-j', '4',
                 '--config', str(ROOT / 'native-build.toml'), '--target-dir', str(target)], cwd=source, check=True)
 output = ROOT / 'native-0.19'
 output.mkdir(exist_ok=True)
-shutil.copy2(target / 'debug/photocraft.exe', output / 'photocraft.exe')
+binary = output / 'photocraft.exe'
+try:
+    shutil.copy2(target / 'debug/photocraft.exe', binary)
+except PermissionError:
+    # Windows locks a running executable. Stage the update for the next launch.
+    binary = output / 'photocraft-next.exe'
+    shutil.copy2(target / 'debug/photocraft.exe', binary)
 for name in ('LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md'):
     shutil.copy2(source / name, output / name)
 info = {'version': 'development', 'photocraft_version': tomllib.loads((source / 'Cargo.toml').read_text(encoding='utf-8'))['workspace']['package']['version'],
         'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
         'profile': 'development',
-        'exe_sha256': hashlib.sha256((output / 'photocraft.exe').read_bytes()).hexdigest(),
+        'executable': binary.name,
+        'exe_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
         'patch_sha256': hashlib.sha256((ROOT / 'native-source/photocraft-codex.patch').read_bytes()).hexdigest()}
 (output / 'BUILD_INFO.json').write_text(json.dumps(info, indent=2), encoding='utf-8')
-print(output / 'photocraft.exe')
+print(binary)

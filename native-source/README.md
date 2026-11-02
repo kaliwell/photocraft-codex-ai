@@ -8,6 +8,11 @@
 `ui.inspect.codexAI.maskFeatherMenu` 提供菜单与控件坐标，供界面测试使用。
 图像导出、选区、图层和撤销仍通过已有引擎命令完成。
 
+边缘羽化使用独立蒙版的向内渐隐：原始覆盖边界为完全透明，内部平滑过渡到不透明。
+`layer.layerMask.edit` 的 `inward: true` 开启此模式；标准蒙版的默认高斯羽化保持原有行为。
+该标志随 `.pcraft` 保存，旧文档默认为标准羽化；右键调整羽化即可应用向内模式。
+算法、缓存和原生格式的扩展位于 `crates/doc`、`crates/compose` 与 `crates/format`。
+
 在项目根目录准备源码（本机已经完成）：
 
 ```powershell

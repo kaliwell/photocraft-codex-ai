@@ -36,4 +36,4 @@ class EditableMaskTests(unittest.TestCase):
         with patch('openfill_photocraft.bridge.PhotoCraftBridge._add_mask') as original:
             bridge._add_mask(1, 9, 'pixels', 0, 24, 3, 4)
         original.assert_called_once_with(1, 9, 'pixels', 0, 0, 3, 4)
-        bridge.client.run.assert_called_once_with('layer.layerMask.edit', layer=9, feather=24)
+        bridge.client.run.assert_called_once_with('layer.layerMask.edit', layer=9, feather=24, inward=True)

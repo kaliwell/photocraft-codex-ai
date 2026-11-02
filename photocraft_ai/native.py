@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import secrets
 import threading
+import time
 
 from .__main__ import ROOT, RUNTIME, connect, panel_lock
 from .backend import Cancelled
@@ -47,6 +48,7 @@ class NativeWorker:
         threading.Thread(target=self._run, args=(request,), daemon=True).start()
 
     def _run(self, request):
+        started = time.monotonic()
         try:
             service = self.service
             if service is None:
@@ -70,7 +72,10 @@ class NativeWorker:
                 raise Cancelled('已取消')
             self.update(message='正在添加新图层…')
             service.apply(prepared, result)
-            self.update(busy=False, message='已生成到新图层 · Ctrl+Z 撤销', error=False)
+            elapsed = time.monotonic() - started
+            self.update(busy=False,
+                        message=f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
+                        error=False)
         except Cancelled:
             self.update(busy=False, message='已取消', error=False)
         except Exception as error:
@@ -135,6 +140,11 @@ def handler(worker: NativeWorker, token: str):
 def main():
     parser = argparse.ArgumentParser(description='PhotoCraft Codex AI 原生选区工具栏')
     upgraded = ROOT / 'native-0.19/photocraft.exe'
+    build_info = upgraded.parent / 'BUILD_INFO.json'
+    if build_info.is_file():
+        executable = json.loads(build_info.read_text(encoding='utf-8')).get('executable', 'photocraft.exe')
+        if executable in ('photocraft.exe', 'photocraft-next.exe'):
+            upgraded = upgraded.with_name(executable)
     parser.add_argument('--photocraft', default=str(upgraded if upgraded.is_file() else ROOT / 'native/photocraft.exe'))
     args = parser.parse_args()
     # Separate from the fallback Tk panel.

@@ -19,9 +19,14 @@ with zipfile.ZipFile(wheel) as archive:
 (python / 'python313._pth').write_text('python313.zip\n.\n..\nLib/site-packages\nimport site\n', encoding='utf-8')
 for folder in ('photocraft_ai', 'vendor'):
     shutil.copytree(ROOT / folder, output / folder, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-shutil.copytree(ROOT / 'native-0.19', output / 'native')
+shutil.copytree(ROOT / 'native-0.19', output / 'native',
+                ignore=shutil.ignore_patterns('photocraft.exe', 'photocraft-next.exe'))
 build_info = json.loads((output / 'native/BUILD_INFO.json').read_text())
 build_info['version'] = VERSION
+staged_executable = build_info.get('executable', 'photocraft.exe')
+assert staged_executable in ('photocraft.exe', 'photocraft-next.exe')
+shutil.copy2(ROOT / 'native-0.19' / staged_executable, output / 'native/photocraft.exe')
+build_info['executable'] = 'photocraft.exe'
 assert build_info['exe_sha256'] == hashlib.sha256((output / 'native/photocraft.exe').read_bytes()).hexdigest()
 assert build_info['photocraft_version'] == '0.19.0'
 (output / 'native/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')

@@ -1,5 +1,243 @@
+diff --git a/crates/compose/src/advanced_tests.rs b/crates/compose/src/advanced_tests.rs
+index 608c618..4334768 100644
+--- a/crates/compose/src/advanced_tests.rs
++++ b/crates/compose/src/advanced_tests.rs
+@@ -168,7 +168,7 @@ fn knockout_follows_masks_and_transparency_shapes() {
+         // A mask hiding x >= 3: only x < 3 knocks out.
+         let mut m = photocraft_raster::Surface::new(PixelFormat::new(ColorMode::Grayscale, depth, false));
+         m.fill_rect(Rect::new(0, 0, 3, 8), &photocraft_raster::from_rgba(&m.format(), [1.0; 4]));
+-        k.mask = Some(LayerMask { surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++        k.mask = Some(LayerMask { inward_feather: false, surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+         d.layers.push(k);
+         check(&d, 1, 2, WHITE, "inside the mask");
+         check(&d, 4, 2, GREEN, "masked out");
+@@ -444,7 +444,7 @@ fn layer_mask_hides_effects() {
+         // The mask shows x < 8.
+         let mut m = photocraft_raster::Surface::new(PixelFormat::new(ColorMode::Grayscale, depth, false));
+         m.fill_rect(Rect::new(0, 0, 8, 8), &photocraft_raster::from_rgba(&m.format(), [1.0; 4]));
+-        l.mask = Some(LayerMask { surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++        l.mask = Some(LayerMask { inward_feather: false, surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+         d.layers.push(l);
+         // Default: the stroke follows the masked shape, so it runs along the mask's edge.
+         check(&d, 7, 4, RED, "stroke along the mask edge");
+diff --git a/crates/compose/src/cmyk/tests.rs b/crates/compose/src/cmyk/tests.rs
+index 44b265c..8fcae10 100644
+--- a/crates/compose/src/cmyk/tests.rs
++++ b/crates/compose/src/cmyk/tests.rs
+@@ -38,7 +38,7 @@ fn mask(rects: &[(Rect, f32)], default: f32, density: f32, enabled: bool) -> Lay
+     for (r, v) in rects {
+         surface.fill_rect(*r, &[*v]);
+     }
+-    LayerMask { surface, enabled, linked: true, density, feather: 0.0 }
++    LayerMask { inward_feather: false, surface, enabled, linked: true, density, feather: 0.0 }
+ }
+ 
+ /// An 8-bit sample as stored.
+diff --git a/crates/compose/src/fx_cache.rs b/crates/compose/src/fx_cache.rs
+index 43e524d..707496d 100644
+--- a/crates/compose/src/fx_cache.rs
++++ b/crates/compose/src/fx_cache.rs
+@@ -61,7 +61,7 @@ pub(crate) fn layer_identity(layer: &Layer, h: &mut std::collections::hash_map::
+         _ => layer.surface().map_or(0, |s| surface_fp(s, pin)).hash(h),
+     }
+     if let Some(m) = &layer.mask {
+-        (surface_fp(&m.surface, pin), m.enabled, m.density.to_bits(), m.feather.to_bits()).hash(h);
++        (surface_fp(&m.surface, pin), m.enabled, m.density.to_bits(), m.feather.to_bits(), m.inward_feather).hash(h);
+     }
+     if let Some(vm) = &layer.vector_mask {
+         format!("{vm:?}").hash(h);
+diff --git a/crates/compose/src/masks.rs b/crates/compose/src/masks.rs
+index 851c9bc..6c8a9a7 100644
+--- a/crates/compose/src/masks.rs
++++ b/crates/compose/src/masks.rs
+@@ -162,7 +162,7 @@ fn key(layer: &Layer, canvas: Rect) -> u64 {
+     (canvas.x0, canvas.y0, canvas.x1, canvas.y1).hash(&mut h);
+     format!("{:?}", layer.vector_mask).hash(&mut h);
+     if let Some(m) = &layer.mask {
+-        (m.enabled, m.density.to_bits(), m.feather.to_bits()).hash(&mut h);
++        (m.enabled, m.density.to_bits(), m.feather.to_bits(), m.inward_feather).hash(&mut h);
+         format!("{:?}", m.surface.default_pixel()).hash(&mut h);
+         for (c, t) in m.surface.tiles() {
+             (c.tx, c.ty, Arc::as_ptr(t) as usize).hash(&mut h);
+@@ -240,7 +240,16 @@ fn build_mask(layer: &Layer, canvas: Rect) -> Surface {
+         if let Some(m) = pixel {
+             let mut pm = Vec::new();
+             m.values_into(area, &mut pm);
+-            gaussian(&mut pm, w, h, sp);
++            if m.inward_feather && sp > 0.0 {
++                // Work on raw support: density is applied after the inward fade.
++                m.surface.read_region_into(area, &mut pm);
++                inward_fade(&mut pm, w, h, m.feather);
++                for value in &mut pm {
++                    *value = 1.0 - m.density * (1.0 - *value);
++                }
++            } else {
++                gaussian(&mut pm, w, h, sp);
++            }
+             for (a, b) in v.iter_mut().zip(pm) {
+                 *a *= b;
+             }
+@@ -250,5 +259,67 @@ fn build_mask(layer: &Layer, canvas: Rect) -> Surface {
+     s
+ }
+ 
++/// Two-pass distance to the nearest transparent pixel. The outermost covered
++/// pixel is zero, so a pre-clipped layer cannot end with a half-opaque seam.
++fn inward_fade(values: &mut [f32], w: usize, h: usize, radius: f32) {
++    if w == 0 || h == 0 || values.len() != w.saturating_mul(h) || radius <= 0.0 {
++        return;
++    }
++    let cap = radius + 2.0;
++    let mut distance: Vec<f32> = values.iter().map(|v| if *v > 0.0 { cap } else { 0.0 }).collect();
++    for y in 0..h {
++        for x in 0..w {
++            let i = y * w + x;
++            let mut d = distance.get(i).copied().unwrap_or(0.0);
++            if x == 0 || y == 0 || x + 1 == w || y + 1 == h {
++                d = d.min(1.0);
++            }
++            if x > 0 {
++                d = d.min(distance.get(i - 1).copied().unwrap_or(0.0) + 1.0);
++            }
++            if y > 0 {
++                d = d.min(distance.get(i - w).copied().unwrap_or(0.0) + 1.0);
++            }
++            if x > 0 && y > 0 {
++                d = d.min(distance.get(i - w - 1).copied().unwrap_or(0.0) + std::f32::consts::SQRT_2);
++            }
++            if x + 1 < w && y > 0 {
++                d = d.min(distance.get(i - w + 1).copied().unwrap_or(0.0) + std::f32::consts::SQRT_2);
++            }
++            if let Some(value) = distance.get_mut(i) {
++                *value = d;
++            }
++        }
++    }
++    for y in (0..h).rev() {
++        for x in (0..w).rev() {
++            let i = y * w + x;
++            let mut d = distance.get(i).copied().unwrap_or(0.0);
++            if x + 1 < w {
++                d = d.min(distance.get(i + 1).copied().unwrap_or(0.0) + 1.0);
++            }
++            if y + 1 < h {
++                d = d.min(distance.get(i + w).copied().unwrap_or(0.0) + 1.0);
++            }
++            if x + 1 < w && y + 1 < h {
++                d = d.min(distance.get(i + w + 1).copied().unwrap_or(0.0) + std::f32::consts::SQRT_2);
++            }
++            if x > 0 && y + 1 < h {
++                d = d.min(distance.get(i + w - 1).copied().unwrap_or(0.0) + std::f32::consts::SQRT_2);
++            }
++            if let Some(value) = distance.get_mut(i) {
++                *value = d;
++            }
++        }
++    }
++    // Large radii soften narrow selections without making the center disappear.
++    let max_depth = distance.iter().copied().fold(0.0_f32, f32::max);
++    let span = radius.min((max_depth - 1.0).max(1.0));
++    for (value, d) in values.iter_mut().zip(distance) {
++        let t = ((d - 1.0) / span).clamp(0.0, 1.0);
++        *value *= t * t * (3.0 - 2.0 * t);
++    }
++}
++
+ #[cfg(test)]
+ mod tests;
+diff --git a/crates/compose/src/masks/tests.rs b/crates/compose/src/masks/tests.rs
+index 9076770..d114b77 100644
+--- a/crates/compose/src/masks/tests.rs
++++ b/crates/compose/src/masks/tests.rs
+@@ -2,6 +2,33 @@ use super::*;
+ use photocraft_doc::LayerMask;
+ use photocraft_doc::vector::{Knot, Path, Subpath, VectorMask};
+ 
++#[test]
++fn inward_mask_reaches_zero_before_clipped_pixel_boundary_at_all_depths() {
++    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
++        let format = PixelFormat::new(ColorMode::Grayscale, depth, false);
++        let mut layer = Layer::raster("AI", PixelFormat::RGBA8);
++        let mut surface = Surface::new(format);
++        surface.fill_rect(Rect::new(10, 10, 50, 50), &[1.0]);
++        layer.mask = Some(LayerMask { surface, feather: 8.0, inward_feather: true, ..LayerMask::reveal_all() });
++        let raw = layer.mask.as_ref().unwrap().surface.clone();
++        for radius in [8.0, 1000.0] {
++            layer.mask.as_mut().unwrap().feather = radius;
++            let result = combined_mask(&layer, Rect::new(0, 0, 60, 60)).unwrap();
++            assert_eq!(result.sample_channel(10, 30, 0), 0.0);
++            assert_eq!(result.sample_channel(9, 30, 0), 0.0);
++            assert_eq!(result.sample_channel(49, 30, 0), 0.0);
++            assert!(result.sample_channel(12, 30, 0) > 0.0);
++            assert!(result.sample_channel(12, 30, 0) < result.sample_channel(16, 30, 0));
++            assert!(result.sample_channel(30, 30, 0) > 0.99);
++        }
++        assert_eq!(layer.mask.as_ref().unwrap().surface, raw);
++        layer.mask.as_mut().unwrap().inward_feather = false;
++        layer.mask.as_mut().unwrap().feather = 8.0;
++        let old = combined_mask(&layer, Rect::new(0, 0, 60, 60)).unwrap();
++        assert!(old.sample_channel(10, 30, 0) > 0.2, "standard feather remains unchanged");
++    }
++}
++
+ fn pending(c: &Mutex<Cache>, k: u64) -> Arc<OnceLock<Surface>> {
+     match lookup(c, k) {
+         CachedMask::Pending(slot, _) => slot,
+diff --git a/crates/compose/src/tests.rs b/crates/compose/src/tests.rs
+index 917192f..3da906a 100644
+--- a/crates/compose/src/tests.rs
++++ b/crates/compose/src/tests.rs
+@@ -2076,7 +2076,7 @@ fn shapeless_fx_doc(depth: SampleType) -> Document {
+             let mut m = photocraft_raster::Surface::new(mask_fmt);
+             m.fill_rect(Rect::new(4 + i as i32, y - 12, 44, y + 30), &[1.0]);
+             m.fill_rect(Rect::new(4 + i as i32, y + 30, 30, y + 34), &[0.5]);
+-            l.mask = Some(LayerMask { surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++            l.mask = Some(LayerMask { inward_feather: false, surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+         }
+         d.layers.push(l);
+     }
+@@ -2088,7 +2088,7 @@ fn shapeless_fx_doc(depth: SampleType) -> Document {
+     inner.advanced.transparency_shapes = false;
+     let mut m = photocraft_raster::Surface::new(mask_fmt);
+     m.fill_rect(Rect::new(8, 240, 36, 380), &[1.0]);
+-    inner.mask = Some(LayerMask { surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++    inner.mask = Some(LayerMask { inward_feather: false, surface: m, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+     let mut g = Layer::group("g", vec![inner]);
+     g.effects.items = vec![Effect::DropShadow(Shadow { size: 40.0, spread: 0.1, ..shadow(90.0, 70.0) }), stroke(120.0, StrokePosition::Outside)];
+     g.opacity = 0.6;
+@@ -4534,7 +4534,7 @@ fn clipped_dissolve_adjustment_preserves_alpha_and_document_coverage() {
+         adjustment.fill_opacity = 0.5;
+         let mut mask = photocraft_raster::Surface::new(PixelFormat::GRAY8);
+         mask.fill_rect(Rect::new(-3, -2, 260, 12), &[1.0]);
+-        adjustment.mask = Some(LayerMask { surface: mask, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++        adjustment.mask = Some(LayerMask { inward_feather: false, surface: mask, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+         d.layers.push(adjustment);
+         let whole = render(&d, bounds);
+         let mut changed = 0;
+diff --git a/crates/doc/src/lib.rs b/crates/doc/src/lib.rs
+index ab13697..65ef382 100644
+--- a/crates/doc/src/lib.rs
++++ b/crates/doc/src/lib.rs
+@@ -243,6 +243,8 @@ mod label_color_tests {
+ 
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct LayerMask {
++    /// Fade inward to zero at the original support boundary.
++    pub inward_feather: bool,
+     /// Grayscale surface; untouched pixels read as `default` (0 = hide, 1 = reveal).
+     pub surface: Surface,
+     pub enabled: bool,
+@@ -253,7 +255,7 @@ pub struct LayerMask {
+ 
+ impl LayerMask {
+     pub fn reveal_all() -> Self {
+-        Self { surface: Surface::with_default(PixelFormat::GRAY8, &[1.0]), enabled: true, linked: true, density: 1.0, feather: 0.0 }
++        Self { inward_feather: false, surface: Surface::with_default(PixelFormat::GRAY8, &[1.0]), enabled: true, linked: true, density: 1.0, feather: 0.0 }
+     }
+     pub fn hide_all() -> Self {
+         Self { surface: Surface::with_default(PixelFormat::GRAY8, &[0.0]), ..Self::reveal_all() }
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds.rs b/crates/engine/src/cmd/layer_mask_props_cmds.rs
-index 64a088e..c8e8d15 100644
+index 64a088e..7afac12 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds.rs
 @@ -1,6 +1,9 @@
@@ -13,22 +251,23 @@ index 64a088e..c8e8d15 100644
  use serde_json::{Value, json};
  
  use crate::commands::CommandSpec;
-@@ -29,8 +32,12 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+@@ -29,8 +32,13 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
      }
      let density = number(p, "density", 100.0)?.map(|d| d / 100.0);
      let feather = number(p, "feather", 1000.0)?;
 -    if density.is_none() && feather.is_none() {
 -        return Err(bad("density or feather is required"));
++    let inward = p.get("inward").map(|v| v.as_bool().ok_or_else(|| bad("inward must be a boolean"))).transpose()?;
 +    let shape = p
 +        .get("shape")
 +        .map(|v| v.as_str().filter(|s| matches!(*s, "selection" | "circle" | "square")).ok_or_else(|| bad("shape must be selection, circle or square")))
 +        .transpose()?;
-+    if density.is_none() && feather.is_none() && shape.is_none() {
++    if density.is_none() && feather.is_none() && shape.is_none() && inward.is_none() {
 +        return Err(bad("density, feather or shape is required"));
      }
      let st = s.active().ok_or(EngineError::NoDocument)?;
      if let Some(document) = p.get("document")
-@@ -43,11 +50,20 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+@@ -43,26 +51,79 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
          None => st.active_layer.ok_or_else(|| bad("no layer given and no active layer"))?,
      };
      let layer = st.doc.layer(id).ok_or(EngineError::NoLayer(id))?;
@@ -41,7 +280,9 @@ index 64a088e..c8e8d15 100644
 +    let replacement = shape.map(|kind| centered_mask(layer, st.doc.bounds(), kind)).transpose()?;
 +    let (old_density, old_feather) = layer.mask.as_ref().map_or((1.0, 0.0), |m| (m.density, m.feather));
 +    let (density, feather) = (density.unwrap_or(old_density), feather.unwrap_or(old_feather));
-+    if replacement.is_some() || (density, feather) != (old_density, old_feather) {
++    let old_inward = layer.mask.as_ref().is_some_and(|m| m.inward_feather);
++    let inward = inward.unwrap_or(old_inward);
++    if replacement.is_some() || (density, feather, inward) != (old_density, old_feather, old_inward) {
          s.edit("Edit Layer Mask", |doc, _| {
              let layer = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
 +            if let Some(surface) = replacement {
@@ -51,8 +292,10 @@ index 64a088e..c8e8d15 100644
 +            }
              let mask = layer.mask.as_mut().ok_or_else(|| bad("the target layer has no pixel mask"))?;
              (mask.density, mask.feather) = (density, feather);
++            mask.inward_feather = inward;
              Ok(())
-@@ -56,13 +72,54 @@ fn edit(s: &mut Session, p: &Value) -> Result<Value> {
+         })?;
+     }
      Ok(json!({"layer": id.0, "density": density * 100.0, "feather": feather}))
  }
  
@@ -109,13 +352,28 @@ index 64a088e..c8e8d15 100644
          run: edit,
          journal: true,
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
-index cd32de1..36aaf36 100644
+index cd32de1..043ea02 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
-@@ -7,6 +7,43 @@ use photocraft_raster::Surface;
+@@ -7,6 +7,58 @@ use photocraft_raster::Surface;
  
  use super::*;
  
++#[test]
++fn inward_feather_property_is_undoable_and_rejects_invalid_values() {
++    let (mut s, id, _) = session(SampleType::U8, false);
++    let before = s.active().unwrap().doc.clone();
++    s.execute(EDIT, json!({"layer": id.0, "feather": 8, "inward": true})).unwrap();
++    assert!(s.active().unwrap().doc.layer(id).unwrap().mask.as_ref().unwrap().inward_feather);
++    s.execute("edit.undo", json!({})).unwrap();
++    assert_eq!(s.active().unwrap().doc, before);
++    s.execute("edit.redo", json!({})).unwrap();
++    assert!(s.active().unwrap().doc.layer(id).unwrap().mask.as_ref().unwrap().inward_feather);
++    for value in [json!(null), json!(3), json!("true")] {
++        assert!(s.execute(EDIT, json!({"inward": value})).is_err());
++    }
++}
++
 +#[test]
 +fn centered_shapes_preserve_pixels_selection_and_restore_with_history_at_all_depths() {
 +    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
@@ -156,6 +414,313 @@ index cd32de1..36aaf36 100644
  fn session(depth: SampleType, adjustment: bool) -> (Session, LayerId, LayerId) {
      let mut doc = Document::new("Masks", Size::new(8, 8), ColorMode::Rgb, depth);
      let background = Layer::raster("Unmasked", doc.pixel_format());
+@@ -16,7 +68,7 @@ fn session(depth: SampleType, adjustment: bool) -> (Session, LayerId, LayerId) {
+         if adjustment { Layer::new("Adjustment", LayerContent::Adjustment(Adjustment::Invert)) } else { Layer::raster("Pixels", doc.pixel_format()) };
+     let mut surface = Surface::with_default(PixelFormat::new(ColorMode::Grayscale, depth, false), &[1.0]);
+     surface.fill_rect(Rect::new(1, 2, 5, 6), &[0.25]);
+-    layer.mask = Some(LayerMask { surface, enabled: !adjustment, linked: false, density: 1.0, feather: 0.0 });
++    layer.mask = Some(LayerMask { inward_feather: false, surface, enabled: !adjustment, linked: false, density: 1.0, feather: 0.0 });
+     let path = Path { inverted: true, ..Default::default() };
+     layer.vector_mask = Some(VectorMask::new(path));
+     let id = layer.id;
+@@ -79,7 +131,7 @@ fn property_commands_update_rendered_edges_without_rewriting_the_mask() {
+             let mut surface = Surface::new(PixelFormat::new(ColorMode::Grayscale, depth, false));
+             surface.fill_rect(Rect::new(0, 0, 32, 8), &[1.0]);
+             let raw = surface.clone();
+-            layer.mask = Some(LayerMask { surface, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++            layer.mask = Some(LayerMask { inward_feather: false, surface, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+             let id = layer.id;
+             doc.layers.push(layer);
+             let mut s = Session::new();
+diff --git a/crates/engine/src/cmd/smart_cmds/filters.rs b/crates/engine/src/cmd/smart_cmds/filters.rs
+index 3009ecf..1569a07 100644
+--- a/crates/engine/src/cmd/smart_cmds/filters.rs
++++ b/crates/engine/src/cmd/smart_cmds/filters.rs
+@@ -54,7 +54,7 @@ fn smart_mut_of(l: &mut Layer) -> Result<&mut SmartObject> {
+ }
+ 
+ fn mask_from_selection(sel: &Surface) -> LayerMask {
+-    LayerMask { surface: sel.clone(), enabled: true, linked: true, density: 1.0, feather: 0.0 }
++    LayerMask { inward_feather: false, surface: sel.clone(), enabled: true, linked: true, density: 1.0, feather: 0.0 }
+ }
+ 
+ /// Appends a smart filter (from a `filter.*` command) and re-renders. A selection becomes the
+diff --git a/crates/engine/src/cmd/smart_svg_cmds/tests.rs b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
+index 18963ce..07d17d3 100644
+--- a/crates/engine/src/cmd/smart_svg_cmds/tests.rs
++++ b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
+@@ -102,6 +102,7 @@ fn shared_instances_keep_placement_filters_masks_and_one_undo_transaction() {
+         });
+         sm.filters_enabled = false;
+         sm.filter_mask = Some(photocraft_doc::LayerMask {
++            inward_feather: false,
+             surface: photocraft_raster::Surface::new(photocraft_color::PixelFormat::GRAY8),
+             enabled: true,
+             linked: true,
+diff --git a/crates/engine/src/cmd/smartselect_cmds/tests.rs b/crates/engine/src/cmd/smartselect_cmds/tests.rs
+index 5fecac7..fb10084 100644
+--- a/crates/engine/src/cmd/smartselect_cmds/tests.rs
++++ b/crates/engine/src/cmd/smartselect_cmds/tests.rs
+@@ -353,6 +353,7 @@ fn refine_edge_outputs_and_undo() {
+     // Existing mask settings (density, feather, linked) are preserved
+     s.edit("set mask", |doc, _| {
+         doc.layers[0].mask = Some(photocraft_doc::LayerMask {
++            inward_feather: false,
+             surface: photocraft_raster::Surface::new(photocraft_color::PixelFormat::GRAY8),
+             density: 0.75,
+             feather: 3.5,
+diff --git a/crates/format/src/convert.rs b/crates/format/src/convert.rs
+index e408297..83b88ae 100644
+--- a/crates/format/src/convert.rs
++++ b/crates/format/src/convert.rs
+@@ -176,6 +176,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
+             psd_raw: opt_blob(&s.psd_raw, sink),
+             filters_enabled: s.filters_enabled,
+             filter_mask: s.filter_mask.as_ref().map(|m| MaskM {
++                inward_feather: m.inward_feather,
+                 surface: surface_m(&m.surface, sink),
+                 enabled: m.enabled,
+                 linked: m.linked,
+@@ -197,6 +198,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
+         fill_opacity: l.fill_opacity,
+         clipped: l.clipped,
+         mask: l.mask.as_ref().map(|m| MaskM {
++            inward_feather: m.inward_feather,
+             surface: surface_m(&m.surface, sink),
+             enabled: m.enabled,
+             linked: m.linked,
+@@ -524,6 +526,7 @@ impl Loader<'_> {
+                 filters_enabled: *filters_enabled,
+                 filter_mask: match filter_mask {
+                     Some(mm) => Some(LayerMask {
++                        inward_feather: mm.inward_feather,
+                         surface: self.surface(&mm.surface)?,
+                         enabled: mm.enabled,
+                         linked: mm.linked,
+@@ -538,9 +541,14 @@ impl Loader<'_> {
+             }),
+         };
+         let mask = match &m.mask {
+-            Some(mm) => {
+-                Some(LayerMask { surface: self.surface(&mm.surface)?, enabled: mm.enabled, linked: mm.linked, density: mm.density, feather: mm.feather })
+-            }
++            Some(mm) => Some(LayerMask {
++                inward_feather: mm.inward_feather,
++                surface: self.surface(&mm.surface)?,
++                enabled: mm.enabled,
++                linked: mm.linked,
++                density: mm.density,
++                feather: mm.feather,
++            }),
+             None => None,
+         };
+         let fill_cache = match &m.fill_cache {
+diff --git a/crates/format/src/manifest.rs b/crates/format/src/manifest.rs
+index 768a3f4..ea09387 100644
+--- a/crates/format/src/manifest.rs
++++ b/crates/format/src/manifest.rs
+@@ -185,6 +185,8 @@ pub struct VideoDataM {
+ 
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+ pub struct MaskM {
++    #[serde(default)]
++    pub inward_feather: bool,
+     pub surface: SurfaceM,
+     pub enabled: bool,
+     pub linked: bool,
+diff --git a/crates/format/tests/it/common/mod.rs b/crates/format/tests/it/common/mod.rs
+index ce0381f..13ed4fa 100644
+--- a/crates/format/tests/it/common/mod.rs
++++ b/crates/format/tests/it/common/mod.rs
+@@ -188,6 +188,7 @@ pub fn rich_doc(mode: ColorMode, depth: SampleType) -> Document {
+             psd_raw: None,
+             filters_enabled: false,
+             filter_mask: Some(LayerMask {
++                inward_feather: false,
+                 surface: Surface::with_default(PixelFormat::GRAY8, &[1.0]),
+                 enabled: true,
+                 linked: false,
+diff --git a/crates/format/tests/it/roundtrip.rs b/crates/format/tests/it/roundtrip.rs
+index 32ef503..a891759 100644
+--- a/crates/format/tests/it/roundtrip.rs
++++ b/crates/format/tests/it/roundtrip.rs
+@@ -11,6 +11,18 @@ use photocraft_raster::Rgba8Image;
+ 
+ const MODES: [ColorMode; 4] = [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Cmyk, ColorMode::Lab];
+ 
++#[test]
++fn inward_feather_roundtrips_with_original_mask_pixels() {
++    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
++        let mut doc = rich_doc(ColorMode::Rgb, depth);
++        let mask = doc.layers.iter_mut().find_map(|l| l.mask.as_mut()).unwrap();
++        mask.inward_feather = true;
++        mask.feather = 24.0;
++        let bytes = save_to_bytes(&doc, &SaveOptions::default()).unwrap();
++        assert_eq!(load_from_bytes(&bytes).unwrap(), doc);
++    }
++}
++
+ #[test]
+ fn gradient_overlay_interpolation_roundtrips_in_native_documents() {
+     use photocraft_doc::effects::GradientInterpolation;
+diff --git a/crates/io/src/affinity.rs b/crates/io/src/affinity.rs
+index 4e5ed90..0d82a32 100644
+--- a/crates/io/src/affinity.rs
++++ b/crates/io/src/affinity.rs
+@@ -327,7 +327,7 @@ impl Builder {
+         if let Some(mask) = &n.pixel_mask
+             && let Some(surface) = self.mask(mask, to_doc)
+         {
+-            l.mask = Some(LayerMask { surface, enabled: true, linked: true, density: 1.0, feather: 0.0 });
++            l.mask = Some(LayerMask { inward_feather: false, surface, enabled: true, linked: true, density: 1.0, feather: 0.0 });
+         }
+         Some(l)
+     }
+diff --git a/crates/io/src/flat.rs b/crates/io/src/flat.rs
+index 8e169bd..cd1e5f2 100644
+--- a/crates/io/src/flat.rs
++++ b/crates/io/src/flat.rs
+@@ -1582,6 +1582,7 @@ mod streamed_png_tests {
+         let mut doc = Document::new("masked", Size::new(80, 300), ColorMode::Rgb, SampleType::U8);
+         let mut bottom = layer(&doc, &[(doc.bounds(), &[0.2, 0.4, 0.6, 1.0])]);
+         bottom.mask = Some(photocraft_doc::LayerMask {
++            inward_feather: false,
+             surface: Surface::with_default(PixelFormat::GRAY8, &[1.0]),
+             enabled: true,
+             linked: true,
+diff --git a/crates/io/src/psd_import.rs b/crates/io/src/psd_import.rs
+index 6989941..6465627 100644
+--- a/crates/io/src/psd_import.rs
++++ b/crates/io/src/psd_import.rs
+@@ -387,6 +387,7 @@ impl Ctx<'_> {
+         }
+         let params = m.parameters;
+         Some(LayerMask {
++            inward_feather: false,
+             surface,
+             enabled: flags & 2 == 0,
+             linked: flags & 1 == 0,
+diff --git a/crates/io/src/smart_map.rs b/crates/io/src/smart_map.rs
+index 72adbe1..2790fc7 100644
+--- a/crates/io/src/smart_map.rs
++++ b/crates/io/src/smart_map.rs
+@@ -177,7 +177,7 @@ pub fn mask_from_item(item: &FilterEffectsItem, sample: SampleType, stack: &Filt
+     if surface.content_bounds().is_empty() {
+         return Ok(None);
+     }
+-    Ok(Some(LayerMask { surface, enabled: stack.mask_enabled, linked: stack.mask_linked, density: 1.0, feather: 0.0 }))
++    Ok(Some(LayerMask { inward_feather: false, surface, enabled: stack.mask_enabled, linked: stack.mask_linked, density: 1.0, feather: 0.0 }))
+ }
+ 
+ /// The unfiltered placed pixels of an `FEid` item (the inverse of [`feid_item`]), in `fmt`: colour
+diff --git a/crates/io/src/xcf.rs b/crates/io/src/xcf.rs
+index e9a6b92..4bd45a7 100644
+--- a/crates/io/src/xcf.rs
++++ b/crates/io/src/xcf.rs
+@@ -1079,7 +1079,7 @@ impl<'a> Image<'a> {
+             let (_mname, _mprops, px) = self.channel(mptr, ctl)?;
+             let mut surface = Surface::new(mask_fmt);
+             write_pixels(&mut surface, &px, x, y)?;
+-            layer.mask = Some(LayerMask { surface, enabled: apply_mask, linked: true, density: 1.0, feather: 0.0 });
++            layer.mask = Some(LayerMask { inward_feather: false, surface, enabled: apply_mask, linked: true, density: 1.0, feather: 0.0 });
+         }
+         let linear = composite_space.unsigned_abs() == 1 || blend_space.unsigned_abs() == 1;
+         Ok(Some((Node { layer, path, group, children: Vec::new() }, linear)))
+diff --git a/crates/io/tests/it/adjust_blend_roundtrip.rs b/crates/io/tests/it/adjust_blend_roundtrip.rs
+index bab904f..4343842 100644
+--- a/crates/io/tests/it/adjust_blend_roundtrip.rs
++++ b/crates/io/tests/it/adjust_blend_roundtrip.rs
+@@ -151,7 +151,14 @@ fn adjustment_doc(adj: &Adjustment, depth: SampleType) -> Document {
+     let mut masked = Layer::new("masked", LayerContent::Adjustment(adj.clone()));
+     masked.opacity = g(128);
+     masked.blend = BlendMode::Multiply;
+-    masked.mask = Some(LayerMask { surface: mask_surface(depth, Rect::new(4, 3, 20, 15), 1.0, 3), enabled: true, linked: true, density: 1.0, feather: 0.0 });
++    masked.mask = Some(LayerMask {
++        inward_feather: false,
++        surface: mask_surface(depth, Rect::new(4, 3, 20, 15), 1.0, 3),
++        enabled: true,
++        linked: true,
++        density: 1.0,
++        feather: 0.0,
++    });
+     d.layers.push(masked);
+     d.layers.push(raster("clip base", fmt, Rect::new(10, 2, 28, 18), 9, true));
+     let mut clipped = Layer::new("clipped", LayerContent::Adjustment(adj.clone()));
+@@ -245,8 +252,14 @@ fn blend_doc(mode: BlendMode) -> Document {
+     l.blend = mode;
+     l.fill_opacity = g(150);
+     l.opacity = g(220);
+-    l.mask =
+-        Some(LayerMask { surface: mask_surface(SampleType::U8, Rect::new(3, 2, 15, 10), 1.0, 4), enabled: true, linked: true, density: 1.0, feather: 0.0 });
++    l.mask = Some(LayerMask {
++        inward_feather: false,
++        surface: mask_surface(SampleType::U8, Rect::new(3, 2, 15, 10), 1.0, 4),
++        enabled: true,
++        linked: true,
++        density: 1.0,
++        feather: 0.0,
++    });
+     d.layers.push(l);
+     let mut clipped = raster("clipped", fmt, Rect::new(0, 0, 12, 16), 3, true);
+     clipped.clipped = true;
+diff --git a/crates/io/tests/it/cmyk_composite_export.rs b/crates/io/tests/it/cmyk_composite_export.rs
+index 0fea336..0590923 100644
+--- a/crates/io/tests/it/cmyk_composite_export.rs
++++ b/crates/io/tests/it/cmyk_composite_export.rs
+@@ -30,6 +30,7 @@ fn mixed_region_document(depth: SampleType, opaque: bool) -> Document {
+     let mut top = Layer::new("Masked ink", LayerContent::Raster(surface));
+     top.opacity = 0.5;
+     top.mask = Some(LayerMask {
++        inward_feather: false,
+         surface: Surface::with_default(PixelFormat::new(ColorMode::Grayscale, depth, false), &[0.5]),
+         enabled: true,
+         linked: true,
+diff --git a/crates/io/tests/it/common/mod.rs b/crates/io/tests/it/common/mod.rs
+index 7bb010f..304a1ab 100644
+--- a/crates/io/tests/it/common/mod.rs
++++ b/crates/io/tests/it/common/mod.rs
+@@ -107,13 +107,26 @@ pub fn gen_doc(mode: ColorMode, depth: SampleType, f: Features) -> Document {
+ 
+     if f.masks {
+         let mut m = raster("Masked", fmt, Rect::new(2, 2, 14, 12), 5, true);
+-        m.mask = Some(LayerMask { surface: mask_surface(depth, Rect::new(4, 4, 10, 9), 1.0, 1), enabled: true, linked: true, density: 1.0, feather: 0.0 });
++        m.mask = Some(LayerMask {
++            inward_feather: false,
++            surface: mask_surface(depth, Rect::new(4, 4, 10, 9), 1.0, 1),
++            enabled: true,
++            linked: true,
++            density: 1.0,
++            feather: 0.0,
++        });
+         m.advanced.layer_mask_hides_effects = true;
+         m.advanced.vector_mask_hides_effects = true;
+         d.layers.push(m);
+         let mut m2 = raster("Masked2", fmt, Rect::new(-2, 1, 6, 5), 6, true);
+-        m2.mask =
+-            Some(LayerMask { surface: mask_surface(depth, Rect::new(-1, 0, 3, 4), 0.0, 2), enabled: false, linked: false, density: g(128), feather: 2.5 });
++        m2.mask = Some(LayerMask {
++            inward_feather: false,
++            surface: mask_surface(depth, Rect::new(-1, 0, 3, 4), 0.0, 2),
++            enabled: false,
++            linked: false,
++            density: g(128),
++            feather: 2.5,
++        });
+         d.layers.push(m2);
+     }
+ 
+diff --git a/crates/io/tests/it/psd_empty_channels.rs b/crates/io/tests/it/psd_empty_channels.rs
+index 610bb14..270a079 100644
+--- a/crates/io/tests/it/psd_empty_channels.rs
++++ b/crates/io/tests/it/psd_empty_channels.rs
+@@ -12,6 +12,7 @@ fn empty_layer_and_mask_channels_use_raw_without_a_payload() {
+                 let mut doc = common::gen_doc(mode, depth, Features::ALL);
+                 let mut masked = common::raster("Uniform mask", doc.pixel_format(), photocraft_geom::Rect::new(0, 0, 3, 3), 1, true);
+                 masked.mask = Some(photocraft_doc::LayerMask {
++                    inward_feather: false,
+                     surface: photocraft_raster::Surface::new(photocraft_color::PixelFormat::new(ColorMode::Grayscale, depth, false)),
+                     enabled: true,
+                     linked: true,
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
 index 12b4a8a..55fd380 100644
 --- a/crates/ui-egui/src/canvas.rs
@@ -513,6 +1078,19 @@ index 4e09d79..d68fb90 100644
  }
  
  pub fn save_screenshot(app: &mut PhotocraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
+diff --git a/crates/ui-egui/src/dialogs/adjust_preview.rs b/crates/ui-egui/src/dialogs/adjust_preview.rs
+index 5d060f2..7e72e74 100644
+--- a/crates/ui-egui/src/dialogs/adjust_preview.rs
++++ b/crates/ui-egui/src/dialogs/adjust_preview.rs
+@@ -101,7 +101,7 @@ pub fn base_document(doc: &Document, target: LayerId) -> Result<Document, String
+     l.id = PREVIEW_LAYER;
+     l.clipped = true;
+     if let Some(sel) = &doc.selection {
+-        l.mask = Some(LayerMask { surface: sel.clone(), enabled: true, linked: false, density: 1.0, feather: 0.0 });
++        l.mask = Some(LayerMask { inward_feather: false, surface: sel.clone(), enabled: true, linked: false, density: 1.0, feather: 0.0 });
+     }
+     let mut out = doc.clone();
+     out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
 index e17b2bc..3509c6d 100644
 --- a/crates/ui-egui/src/lib.rs
@@ -526,7 +1104,7 @@ index e17b2bc..3509c6d 100644
  pub mod dialogs;
  pub mod dock;
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui.rs b/crates/ui-egui/src/panels/layer_menu_ui.rs
-index f274e28..6f84fa9 100644
+index f274e28..d5ecd95 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui.rs
 +++ b/crates/ui-egui/src/panels/layer_menu_ui.rs
 @@ -147,6 +147,10 @@ pub fn show(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, on_set: bo
@@ -567,7 +1145,7 @@ index f274e28..6f84fa9 100644
 +                let response = ui.button(text);
 +                controls[shape] = json!([response.rect.min.x, response.rect.min.y, response.rect.width(), response.rect.height()]);
 +                if response.clicked() {
-+                    actions.push(("layer.layerMask.edit".into(), json!({"document": document, "layer": layer.id.0, "shape": shape})));
++                    actions.push(("layer.layerMask.edit".into(), json!({"document": document, "layer": layer.id.0, "shape": shape, "inward": true})));
 +                }
 +            }
 +        });
@@ -593,7 +1171,7 @@ index f274e28..6f84fa9 100644
 +        controls["slider"] = json!([response.rect.min.x, response.rect.min.y, response.rect.width(), response.rect.height()]);
 +        controls["feather"] = json!(feather);
 +        if response.changed() {
-+            let mut params = json!({"document": document, "layer": layer.id.0, "feather": feather,
++            let mut params = json!({"document": document, "layer": layer.id.0, "feather": feather, "inward": true,
 +                "coalesce": format!("mask-context:{document}:{}:{gesture}", layer.id.0)});
 +            if layer.mask.is_none() {
 +                params["shape"] = json!("selection");
