@@ -6,7 +6,7 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 output = ROOT / f'dist/photocraft-codex-ai-{VERSION}-windows-x64-local-node'
 output.mkdir(parents=True, exist_ok=False)
 python = output / 'python'
@@ -46,6 +46,8 @@ command = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0python\\python
     '账号登录可随时运行 login.cmd。错误日志在 runtime/launcher.log。\n'
     '生成图片默认 0 羽化；局部修改和移除物体默认 12 像素。\n'
     '右键 AI 结果图层 -> 边缘羽化：选择原选区/圆形/正方形，拖动羽化滑条（0-1000 px）。\n'
+    '羽化向选区内部渐变，最外沿完全透明；已有图层重新调整滑条即可应用。\n'
+    '生成完成后显示本次总耗时，包含读取选区、生图和导入。\n'
     '新图层使用可编辑蒙版，保存 .pcraft 后保留参数。旧图层已烘焙的软边不能反向恢复。\n', encoding='utf-8-sig')
 manifest = {str(p.relative_to(output).as_posix()): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in output.rglob('*') if p.is_file()}

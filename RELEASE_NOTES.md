@@ -1,17 +1,25 @@
-# PhotoCraft Codex AI v0.3.0 · PhotoCraft 0.19.0
+# PhotoCraft Codex AI v0.3.1 · PhotoCraft 0.19.0
 
 ## 中文
 
-配套编辑器从 PhotoCraft 0.18.0 升级到正式发布的 0.19.0，保留选区 AI 工具栏、直接接收生成图片、本地 Node.js/Codex 和可编辑蒙版羽化。
+- 修复局部修改羽化边缘仍有硬截断的问题：向选区内部平滑渐隐，最外沿完全透明。支持原选区、居中圆形和正方形蒙版，保留 0–1000 px 滑条、撤销/重做和 `.pcraft` 保存。已有图层重新调整羽化滑条即可应用。
+- 生成成功后显示本次总耗时，包含读取选区、生图和导入新图层。
+- 改进 Windows 运行中更新的二进制暂存与安装包构建，保证包内使用最新编辑器。
 
-下载 `photocraft-codex-ai-0.3.0-windows-x64-local-node.zip`，完整解压后运行 `start.cmd`。更新前保存项目并关闭旧版。包内包含 Python/Pillow 与配套编辑器，不包含 Node.js、Codex CLI 或账号凭据。
+下载 `photocraft-codex-ai-0.3.1-windows-x64-local-node.zip`，完整解压后运行 `start.cmd`。更新前保存文档并关闭旧版，建议解压到新文件夹；需要代理时复制自己的 `runtime/codex-proxy.json`。
 
-上游版本包括大图层拖动优化、多图层变换手柄、PSD 导入内存处理与颜色选择器等改进；保留新版默认移动工具。
+包内包含 PhotoCraft 0.19.0、Python 3.13.5 和 Pillow 11.3.0；沿用电脑已有 Node.js、npm 安装的 Codex CLI 和自己的登录，不额外打包 Node.js/Codex，也不包含账号凭据。
+
+专项、实机、静态、wasm 和异常输入检查通过。全套回归并非全部通过：开发配置下现有深嵌套小栈问题、Windows 基准构建执行权限和外部测试素材下载限制详见 `VALIDATION.md`。仍为预览开发构建，需要网络和支持内置生图的 Codex 账号。
 
 ## English
 
-Upgrades the matching editor from PhotoCraft 0.18.0 to the official 0.19.0 release, retaining the native AI selection toolbar, direct image receipt, local Node.js/Codex, and editable layer masks.
+- Fixes sharp feather boundaries on clipped AI results: masks now fade inward to full transparency at the outer edge. Original selection, centered circle and square masks retain their 0–1000 px controls, undo/redo and `.pcraft` persistence. Adjust an existing layer's feather slider to apply the new mode.
+- Shows total elapsed time after successful generation, including selection export, generation and import.
+- Updates Windows executable staging and packaging so the current editor build is included.
 
-Download `photocraft-codex-ai-0.3.0-windows-x64-local-node.zip`, extract completely, and run `start.cmd`. Save documents and close the old version before updating. Includes Python/Pillow and the matching editor, not Node.js, Codex CLI, or account credentials.
+Download `photocraft-codex-ai-0.3.1-windows-x64-local-node.zip`, extract completely, and run `start.cmd`. Save documents and close the old version first. Extract into a new folder and copy your own `runtime/codex-proxy.json` if needed.
 
-This remains a preview development build. Internet access and a Codex account with working built-in image generation are required.
+Includes PhotoCraft 0.19.0, Python 3.13.5 and Pillow 11.3.0. Uses local Node.js, npm-installed Codex CLI and your own sign-in; no Node.js, Codex CLI or account credentials are bundled.
+
+Focused, live-editor, static, wasm and adversarial-input checks passed. Full regression is not entirely green; existing small-stack failures in the development configuration and environment limits are documented in `VALIDATION.md`. This remains a preview development build requiring internet access and a Codex account with working built-in image generation.
