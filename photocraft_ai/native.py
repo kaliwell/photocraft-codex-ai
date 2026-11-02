@@ -134,7 +134,8 @@ def handler(worker: NativeWorker, token: str):
 
 def main():
     parser = argparse.ArgumentParser(description='PhotoCraft Codex AI 原生选区工具栏')
-    parser.add_argument('--photocraft', default=str(ROOT / 'native/photocraft.exe'))
+    upgraded = ROOT / 'native-0.19/photocraft.exe'
+    parser.add_argument('--photocraft', default=str(upgraded if upgraded.is_file() else ROOT / 'native/photocraft.exe'))
     args = parser.parse_args()
     # Separate from the fallback Tk panel.
     singleton = panel_lock('native.lock')

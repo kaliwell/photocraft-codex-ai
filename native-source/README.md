@@ -1,7 +1,7 @@
 # PhotoCraft 原生集成源码
 
-基线：`storytold/photocraft`，版本 0.18.0，提交
-`422ca7beda90d927643bcd074646ebbd37706d75`。
+基线：`storytold/photocraft`，版本 0.19.0，提交
+`2df9f807702a935184041355a86405380bda8274`。
 
 修改涉及 `crates/ui-egui` 和 `crates/engine`：选区下方的 egui 工具栏、可序列化的提示词状态、
 后台本地请求、图层右键羽化控制，以及 `layer.layerMask.edit` 的居中圆形/正方形蒙版参数。
@@ -11,13 +11,13 @@
 在项目根目录准备源码（本机已经完成）：
 
 ```powershell
-git clone https://github.com/storytold/photocraft.git research/photocraft
-git -C research/photocraft checkout 422ca7beda90d927643bcd074646ebbd37706d75
-git -C research/photocraft apply ../../native-source/photocraft-codex.patch
+git clone https://github.com/storytold/photocraft.git research/photocraft-0.19
+git -C research/photocraft-0.19 checkout 2df9f807702a935184041355a86405380bda8274
+git -C research/photocraft-0.19 apply ../../native-source/photocraft-codex.patch
 python build_native.py
 ```
 
-依赖 Rust/MSVC 构建工具及网络下载 Cargo 依赖。构建输出 `native/photocraft.exe`，
+依赖 Python 3.11+、Rust/MSVC 构建工具及网络下载 Cargo 依赖。构建输出 `native-0.19/photocraft.exe`，
 不修改已安装的原版编辑器。`native-build.toml` 是便于本机迭代的开发配置。
 
 原生界面只在启动脚本设置 `PHOTOCRAFT_CODEX_PORT` 和 `PHOTOCRAFT_CODEX_TOKEN_FILE`

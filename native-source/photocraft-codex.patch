@@ -157,10 +157,10 @@ index cd32de1..36aaf36 100644
      let mut doc = Document::new("Masks", Size::new(8, 8), ColorMode::Rgb, depth);
      let background = Layer::raster("Unmasked", doc.pixel_format());
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
-index da59b5a..efecea0 100644
+index 12b4a8a..55fd380 100644
 --- a/crates/ui-egui/src/canvas.rs
 +++ b/crates/ui-egui/src/canvas.rs
-@@ -2055,6 +2055,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
+@@ -2074,6 +2074,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
          camera,
      };
      finish_canvas_view(app, ui, &mut view, &tail);
@@ -172,10 +172,10 @@ index da59b5a..efecea0 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 0000000..32facf4
+index 0000000..5ede355
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,311 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use egui::{Context, Rect, Vec2, pos2, vec2};
@@ -439,6 +439,12 @@ index 0000000..32facf4
 +mod tests {
 +    use super::{Context, PhotocraftApp, Rect, ViewXform, json, pos2, position, selection_rect, vec2};
 +    #[test]
++    fn prompt_defaults_preserve_upstream_move_tool() {
++        let ui = crate::state::UiState::default();
++        assert_eq!(ui.tool, crate::state::Tool::Move);
++        assert!(ui.codex_ai_prompt.is_empty());
++    }
++    #[test]
 +    fn follows_selection_and_stays_inside_canvas() {
 +        let canvas = Rect::from_min_max(pos2(50.0, 80.0), pos2(950.0, 700.0));
 +        let size = vec2(560.0, 104.0);
@@ -482,7 +488,7 @@ index 0000000..32facf4
 +    }
 +}
 diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
-index 9b2140d..09b78e5 100644
+index 4e09d79..d68fb90 100644
 --- a/crates/ui-egui/src/control/inspect.rs
 +++ b/crates/ui-egui/src/control/inspect.rs
 @@ -29,7 +29,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
@@ -494,7 +500,7 @@ index 9b2140d..09b78e5 100644
          "window": {"width": screen.width(), "height": screen.height(), "pixelsPerPoint": ctx.pixels_per_point()},
          "tool": app.ui.tool,
          "toolOptions": app.ui.tool_options,
-@@ -115,7 +115,11 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
+@@ -121,7 +121,11 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
          "jobs": crate::jobs_ui::inspect(app),
          "histogram": crate::histogram_panel::inspect(app),
          "cameraRaw": app.camera_raw.as_ref().map(|d| d.describe(&app.ui.camera_raw_scope, &app.ui.camera_raw_preview)),
@@ -508,10 +514,10 @@ index 9b2140d..09b78e5 100644
  
  pub fn save_screenshot(app: &mut PhotocraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index e272ddb..2e4721d 100644
+index e17b2bc..3509c6d 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
-@@ -24,6 +24,7 @@ macro_rules! tl {
+@@ -26,6 +26,7 @@ macro_rules! tl {
  }
  mod brush_mode_menu;
  pub mod canvas;
@@ -648,7 +654,7 @@ index a7ab70a..3acdcc9 100644
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
-index 060871a..bec5f14 100644
+index c18a418..9ca77a1 100644
 --- a/crates/ui-egui/src/state.rs
 +++ b/crates/ui-egui/src/state.rs
 @@ -204,6 +204,9 @@ pub struct DocWindow {
@@ -661,11 +667,11 @@ index 060871a..bec5f14 100644
      pub tool: Tool,
      /// The last tool used in each shortcut group (the tools sharing a key, [`Tool::key`]), at most
      /// one per group: the group's key brings it back, as in Photoshop (#2608).
-@@ -514,6 +517,7 @@ pub struct UiState {
+@@ -519,6 +522,7 @@ pub struct UiState {
  impl Default for UiState {
      fn default() -> Self {
          Self {
 +            codex_ai_prompt: String::new(),
-             tool: Tool::Brush,
+             tool: Tool::Move,
              group_tools: Vec::new(),
              spring: None,

@@ -6,7 +6,7 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = '0.2.9'
+VERSION = '0.3.0'
 output = ROOT / f'dist/photocraft-codex-ai-{VERSION}-windows-x64-local-node'
 output.mkdir(parents=True, exist_ok=False)
 python = output / 'python'
@@ -17,11 +17,13 @@ wheel = next((ROOT / 'runtime/portable-downloads').glob('pillow-11.3.0-cp313-cp3
 with zipfile.ZipFile(wheel) as archive:
     archive.extractall(python / 'Lib/site-packages')
 (python / 'python313._pth').write_text('python313.zip\n.\n..\nLib/site-packages\nimport site\n', encoding='utf-8')
-for folder in ('photocraft_ai', 'vendor', 'native'):
+for folder in ('photocraft_ai', 'vendor'):
     shutil.copytree(ROOT / folder, output / folder, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+shutil.copytree(ROOT / 'native-0.19', output / 'native')
 build_info = json.loads((output / 'native/BUILD_INFO.json').read_text())
 build_info['version'] = VERSION
 assert build_info['exe_sha256'] == hashlib.sha256((output / 'native/photocraft.exe').read_bytes()).hexdigest()
+assert build_info['photocraft_version'] == '0.19.0'
 (output / 'native/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')
 for name in ('portable_launcher.py', 'README.md', 'THIRD_PARTY.md', 'VALIDATION.md', 'RELEASE_NOTES.md'):
     shutil.copy2(ROOT / name, output / name)
