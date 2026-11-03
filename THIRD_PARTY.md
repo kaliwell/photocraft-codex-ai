@@ -32,3 +32,7 @@ are preserved alongside the binary. The local source patch is in `native-source/
 Reference-image attachments are adapted from the user's PhotoCraft Userfull Tools
 repository, https://github.com/kaliwell/photocraft-userfull-tools,
 commit `c05124bca29def76e35b2293245161c34da75eba`, and integrated into the 0.20.1 editor.
+
+The unified development build also adapts Userfull Tools v0.3.8's native cutter,
+clipboard export and language helpers, and its v0.3.7 image-size adaptation with
+reference support. These are hosted in the same PhotoCraft process.

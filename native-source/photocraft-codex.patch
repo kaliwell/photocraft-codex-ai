@@ -1,3 +1,45 @@
+diff --git a/crates/automation/src/workspace.rs b/crates/automation/src/workspace.rs
+index a60cc66a..26d28196 100644
+--- a/crates/automation/src/workspace.rs
++++ b/crates/automation/src/workspace.rs
+@@ -325,6 +325,11 @@ fn file_error(operation: &str, path: &str, error: std::io::Error) -> AutomationE
+ /// directory capabilities. Automation must use `doc.open`, `doc.save` and
+ /// `doc.render` for file effects until those commands are migrated.
+ pub fn authorize_engine_command(id: &str, params: &Value) -> Result<(), AutomationError> {
++    // Clipboard export has no filesystem destination. Keep this exception exact and
++    // parameter-free; all ordinary file exports still require a directory capability.
++    if id == "file.export.clipboard" {
++        return if params.is_null() || params.as_object().is_some_and(|object| object.is_empty()) { Ok(()) } else { Err(command_error(id)) };
++    }
+     let safe_file_command = matches!(
+         id,
+         "file.new"
+diff --git a/crates/automation/src/workspace/tests.rs b/crates/automation/src/workspace/tests.rs
+index e96ccb36..1cad16ac 100644
+--- a/crates/automation/src/workspace/tests.rs
++++ b/crates/automation/src/workspace/tests.rs
+@@ -499,6 +499,21 @@ fn automation_rejects_ambient_path_commands_and_preferences() {
+     assert!(authorize_engine_command("prefs.set", &serde_json::json!({"path": "fileHandling.autosave", "value": false})).is_ok());
+ }
+ 
++#[test]
++fn clipboard_export_authorization_is_pathless_and_does_not_allow_other_exports() {
++    for params in [serde_json::Value::Null, serde_json::json!({})] {
++        assert!(authorize_engine_command("file.export.clipboard", &params).is_ok());
++        assert!(authorize_desktop_engine_command("file.export.clipboard", &params).is_ok());
++    }
++    for params in [serde_json::json!({"path":"/outside/output.png"}), serde_json::json!({"dir":"/outside"}), serde_json::json!([])] {
++        assert!(authorize_engine_command("file.export.clipboard", &params).is_err());
++        assert!(authorize_desktop_engine_command("file.export.clipboard", &params).is_err());
++    }
++    for id in ["file.export.exportAs", "file.export.quickExportAsPng", "file.export.clipboardOther"] {
++        assert!(authorize_engine_command(id, &serde_json::json!({})).is_err());
++    }
++}
++
+ #[test]
+ fn registry_filesystem_path_params_are_classified() {
+     let probe = serde_json::json!({
 diff --git a/crates/compose/src/advanced_tests.rs b/crates/compose/src/advanced_tests.rs
 index 15d3cf23..4e8ac354 100644
 --- a/crates/compose/src/advanced_tests.rs
@@ -236,6 +278,150 @@ index ab13697e..65ef3825 100644
      }
      pub fn hide_all() -> Self {
          Self { surface: Surface::with_default(PixelFormat::GRAY8, &[0.0]), ..Self::reveal_all() }
+diff --git a/crates/engine/src/cmd.rs b/crates/engine/src/cmd.rs
+index e2e9c3bd..cf15b831 100644
+--- a/crates/engine/src/cmd.rs
++++ b/crates/engine/src/cmd.rs
+@@ -63,6 +63,7 @@ pub mod brush_cmds;
+ pub mod brush_key_cmds;
+ pub mod brush_preset_cmds;
+ pub mod channel_cmds;
++pub mod clipboard_export_cmds;
+ pub mod color_cmds;
+ pub mod color_to_alpha_cmds;
+ pub mod comps_cmds;
+@@ -1308,6 +1309,7 @@ fn build() -> Vec<CommandSpec> {
+     v.extend(crate::cutout_cmds::specs());
+     v.extend(crate::symmetry_cmds::specs());
+     v.extend(crate::edit_cmds::specs());
++    v.extend(clipboard_export_cmds::specs());
+     v.extend(crate::smart_svg_cmds::specs());
+     v.extend(crate::color_cmds::specs());
+     v.extend(crate::brush_cmds::specs());
+diff --git a/crates/engine/src/cmd/clipboard_export_cmds.rs b/crates/engine/src/cmd/clipboard_export_cmds.rs
+new file mode 100644
+index 00000000..49db70b5
+--- /dev/null
++++ b/crates/engine/src/cmd/clipboard_export_cmds.rs
+@@ -0,0 +1,118 @@
++//! Export the entire visible canvas to the session clipboard without changing the document.
++
++use photocraft_color::{ColorMode, PixelFormat};
++use serde_json::{Value, json};
++
++use crate::commands::CommandSpec;
++use crate::edit_cmds::Clip;
++use crate::{EngineError, Result, Session};
++
++pub const EXPORT: &str = "file.export.clipboard";
++const MAX_PIXELS: u64 = 64_000_000;
++
++/// Render without changing the document. The desktop bridge restores the previous session
++/// clipboard if the operating system refuses the image.
++fn prepare(s: &Session, params: &Value) -> Result<Clip> {
++    if !params.is_null() && !params.as_object().is_some_and(|object| object.is_empty()) {
++        return Err(EngineError::Other("Export to Clipboard expects an empty parameter object".into()));
++    }
++    let state = s.active().ok_or(EngineError::NoDocument)?;
++    let doc = &state.doc;
++    let bounds = doc.bounds();
++    let pixels = u64::from(bounds.width()) * u64::from(bounds.height());
++    if bounds.is_empty() || pixels > MAX_PIXELS {
++        return Err(EngineError::Other("Export to Clipboard requires a nonempty canvas of at most 64 million pixels".into()));
++    }
++    crate::allocation::checkpoint("exporting to the clipboard")?;
++    // The shared compositor handles the source's colour mode and depth, masks, opacity,
++    // blend modes and visibility. OS clipboards receive RGBA, not document-native channels.
++    let surface = photocraft_compose::flatten_to_surface(doc, PixelFormat::new(ColorMode::Rgb, doc.depth, true), None);
++    Ok(Clip { components: None, surface, bounds, layers: None, resolution: Some(doc.resolution_dpi), source: Some(doc.id), svg: None })
++}
++
++pub fn specs() -> Vec<CommandSpec> {
++    vec![CommandSpec {
++        id: EXPORT,
++        label: "Export to Clipboard",
++        menu: &["File", "Export"],
++        shortcut: None,
++        params: "{} → {width,height}; full visible canvas, ignoring the selection; desktop writes an RGBA8 system clipboard image",
++        enabled: |s| s.active().map(|_| ()).ok_or_else(|| "no document open".into()),
++        run: |s, p| {
++            let clip = prepare(s, p)?;
++            let result = json!({"width": clip.bounds.width(), "height": clip.bounds.height()});
++            s.clipboard = Some(clip);
++            Ok(result)
++        },
++        journal: false,
++    }]
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use photocraft_color::SampleType;
++    use photocraft_doc::{Document, Layer};
++    use photocraft_geom::{Rect, Size};
++    use photocraft_raster::Surface;
++
++    #[test]
++    fn full_canvas_preserves_selection_history_and_transparency_at_all_depths() {
++        for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
++            let mut doc = Document::new("Clipboard", Size::new(12, 10), ColorMode::Rgb, depth);
++            let mut layer = Layer::raster("Visible", doc.pixel_format());
++            layer.surface_mut().unwrap().fill_rect(Rect::new(2, 2, 8, 8), &[1.0, 0.0, 0.0, 0.5]);
++            doc.layers.push(layer);
++            let mut second = Layer::raster("Second visible layer", doc.pixel_format());
++            second.surface_mut().unwrap().fill_rect(Rect::new(10, 8, 12, 10), &[0.0, 0.0, 1.0, 1.0]);
++            doc.layers.push(second);
++            let mut hidden = Layer::raster("Hidden", doc.pixel_format());
++            hidden.surface_mut().unwrap().fill_rect(doc.bounds(), &[0.0, 1.0, 0.0, 1.0]);
++            hidden.visible = false;
++            doc.layers.push(hidden);
++            let mut selection = Surface::new(PixelFormat::GRAY8);
++            selection.fill_rect(Rect::new(0, 0, 1, 1), &[1.0]);
++            doc.selection = Some(selection);
++            let mut s = Session::new();
++            s.add_document(doc, None);
++            let before = s.active().unwrap().doc.clone();
++            let revision = s.active().unwrap().revision;
++            let history = s.active().unwrap().history.past_len();
++            let result = s.execute(EXPORT, json!({})).unwrap();
++            assert_eq!(result, json!({"width":12,"height":10}));
++            let clip = s.clipboard.as_ref().unwrap();
++            assert_eq!(clip.bounds, Rect::new(0, 0, 12, 10));
++            assert_eq!(clip.surface.rgba(0, 0)[3], 0.0);
++            let p = clip.surface.rgba(4, 4);
++            assert!(p[0] > 0.99 && p[1] < 0.01 && (p[3] - 0.5).abs() < 0.01);
++            assert!(clip.surface.rgba(11, 9)[2] > 0.99);
++            assert_eq!(s.active().unwrap().doc, before);
++            assert_eq!(s.active().unwrap().revision, revision);
++            assert_eq!(s.active().unwrap().history.past_len(), history);
++        }
++    }
++
++    #[test]
++    fn transparent_canvas_is_an_image_and_invalid_requests_preserve_previous_clip() {
++        let mut s = Session::new();
++        assert!(s.execute(EXPORT, json!({})).is_err());
++        s.add_document(Document::new("Empty", Size::new(4, 3), ColorMode::Rgb, SampleType::U8), None);
++        s.execute(EXPORT, json!({})).unwrap();
++        assert_eq!(s.clipboard.as_ref().unwrap().bounds, Rect::new(0, 0, 4, 3));
++        for bad in [json!(true), json!([]), json!({"path":"unused.png"}), json!({"selection":true})] {
++            assert!(s.execute(EXPORT, bad).is_err());
++            assert_eq!(s.clipboard.as_ref().unwrap().bounds, Rect::new(0, 0, 4, 3));
++        }
++        crate::allocation::fail_next_for_test();
++        assert!(s.execute(EXPORT, json!({})).is_err());
++        assert_eq!(s.clipboard.as_ref().unwrap().bounds, Rect::new(0, 0, 4, 3));
++    }
++
++    #[test]
++    fn oversized_canvas_is_refused_before_rendering() {
++        let mut s = Session::new();
++        s.add_document(Document::new("Large", Size::new(10_000, 10_000), ColorMode::Rgb, SampleType::U8), None);
++        assert!(s.execute(EXPORT, json!({})).is_err());
++        assert!(s.clipboard.is_none());
++    }
++}
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds.rs b/crates/engine/src/cmd/layer_mask_props_cmds.rs
 index 64a088ea..7afac125 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds.rs
@@ -721,8 +907,146 @@ index 610bb145..270a0794 100644
                      surface: photocraft_raster::Surface::new(photocraft_color::PixelFormat::new(ColorMode::Grayscale, depth, false)),
                      enabled: true,
                      linked: true,
+diff --git a/crates/ui-egui/src/app.rs b/crates/ui-egui/src/app.rs
+index 3015f021..9c160fbe 100644
+--- a/crates/ui-egui/src/app.rs
++++ b/crates/ui-egui/src/app.rs
+@@ -186,6 +186,7 @@ impl PhotocraftApp {
+             updates_rt: Default::default(),
+             discard: None,
+             file_dialog: None,
++            long_cut: None,
+             tiff_options: None,
+             save_dirs: HashMap::new(),
+             disk_stamps: HashMap::new(),
+diff --git a/crates/ui-egui/src/app/clipboard.rs b/crates/ui-egui/src/app/clipboard.rs
+index 54d4de90..84f3ed92 100644
+--- a/crates/ui-egui/src/app/clipboard.rs
++++ b/crates/ui-egui/src/app/clipboard.rs
+@@ -78,6 +78,36 @@ impl PhotocraftApp {
+         get().ok().map(|source| source.map(std::sync::Arc::new))
+     }
+ 
++    /// Explicit export ignores the preference that disables automatic Copy mirroring.
++    /// No intermediate file, selection change, document edit, or history step is needed.
++    pub(super) fn export_document_clipboard(&mut self, params: &serde_json::Value) -> Result<serde_json::Value, String> {
++        if self.services.clipboard_set_image.is_none() {
++            return Err(tl!("System image clipboard is unavailable").into());
++        }
++        let previous = self.session.clipboard.clone();
++        self.session.execute("file.export.clipboard", params.clone()).map_err(|e| e.to_string())?;
++        let result = (|| {
++            let clip = self.session.clipboard.as_ref().ok_or("No image to export")?;
++            let b = clip.bounds;
++            let len = (b.width() as usize).checked_mul(b.height() as usize).and_then(|n| n.checked_mul(4)).ok_or("Clipboard image is too large")?;
++            let mut bytes = Vec::new();
++            bytes.try_reserve_exact(len).map_err(|_| "Not enough memory for the clipboard image")?;
++            bytes.resize(len, 0u8);
++            clip.surface.read_rgba8_into(b, bytes.as_chunks_mut::<4>().0);
++            let set = self.services.clipboard_set_image.as_mut().ok_or("System image clipboard is unavailable")?;
++            set(b.width(), b.height(), &bytes)?;
++            self.os_clip_sig = Some(clip_signature(b.width(), b.height(), &bytes));
++            self.os_clip_svg = None;
++            self.clip_external = false;
++            self.clip_unmirrored = false;
++            Ok(serde_json::json!({"width":b.width(),"height":b.height(),"copied":true}))
++        })();
++        if result.is_err() {
++            self.session.clipboard = previous;
++        }
++        result
++    }
++
+     /// Mirror the session clipboard onto the OS clipboard (RGBA8).
+     pub(super) fn export_os_clipboard(&mut self) {
+         self.clip_unmirrored = true;
+diff --git a/crates/ui-egui/src/app/clipboard_tests.rs b/crates/ui-egui/src/app/clipboard_tests.rs
+index 956776a5..0f6ea918 100644
+--- a/crates/ui-egui/src/app/clipboard_tests.rs
++++ b/crates/ui-egui/src/app/clipboard_tests.rs
+@@ -180,6 +180,51 @@ fn action_vector_paste_reads_the_current_svg_source() {
+     assert!(matches!(state.doc.layer(state.active_layer.unwrap()).unwrap().content, photocraft_doc::LayerContent::Shape(_)));
+ }
+ 
++#[test]
++fn clipboard_export_copies_the_whole_canvas_even_with_selection_and_mirroring_disabled() {
++    let os = OsClip::default();
++    let output = os.clone();
++    let services = Services {
++        clipboard_set_image: Some(Box::new(move |w, h, bytes| {
++            *output.lock().unwrap() = Some((w, h, bytes.to_vec()));
++            Ok(())
++        })),
++        ..Default::default()
++    };
++    let mut app = PhotocraftApp::new(Session::new(), services);
++    app.session.execute("file.new", serde_json::json!({"width":16,"height":12,"background":"transparent"})).unwrap();
++    app.session.execute("prefs.set", serde_json::json!({"path":"general.exportClipboard","value":false})).unwrap();
++    app.run("select.rect", serde_json::json!({"x":2,"y":3,"width":4,"height":5})).unwrap();
++    let before = app.session.active().unwrap().doc.clone();
++    let revision = app.session.active().unwrap().revision;
++    assert!(crate::menus::is_enabled(&app, "file.export.clipboard"));
++    let result = crate::menus::invoke(&mut app, &egui::Context::default(), "file.export.clipboard", serde_json::Value::Null).unwrap();
++    assert_eq!(result, serde_json::json!({"width":16,"height":12,"copied":true}));
++    let (w, h, bytes) = os.lock().unwrap().clone().unwrap();
++    assert_eq!((w, h, bytes.len()), (16, 12, 16 * 12 * 4));
++    assert!(bytes.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0));
++    assert_eq!(app.session.active().unwrap().doc, before);
++    assert_eq!(app.session.active().unwrap().revision, revision);
++    assert!(!app.ui.status_error);
++}
++
++#[test]
++fn clipboard_export_reports_busy_and_unavailable_clipboards_without_replacing_session_copy() {
++    let mut app = PhotocraftApp::new(Session::new(), Services::default());
++    assert!(!crate::menus::is_enabled(&app, "file.export.clipboard"));
++    app.session.execute("file.new", serde_json::json!({"width":16,"height":12,"background":"white"})).unwrap();
++    app.run("select.rect", serde_json::json!({"x":0,"y":0,"width":2,"height":3})).unwrap();
++    app.run("edit.copyMerged", serde_json::json!({})).unwrap();
++    let before = app.session.clipboard.as_ref().unwrap().clone();
++    assert!(app.run("file.export.clipboard", serde_json::json!({})).is_err());
++    assert!(app.ui.status_error);
++    app.services.clipboard_set_image = Some(Box::new(|_, _, _| Err("clipboard is busy".into())));
++    assert_eq!(app.run("file.export.clipboard", serde_json::json!({})).unwrap_err(), "clipboard is busy");
++    assert_eq!(app.session.clipboard.as_ref().unwrap().bounds, before.bounds);
++    assert_eq!(app.session.clipboard.as_ref().unwrap().surface, before.surface);
++    assert!(app.ui.status_error);
++}
++
+ #[test]
+ fn failed_clipboard_reads_preserve_editable_contents_until_retry() {
+     use std::sync::atomic::{AtomicBool, Ordering};
+diff --git a/crates/ui-egui/src/app/commands.rs b/crates/ui-egui/src/app/commands.rs
+index 1a43ffe7..7844e43e 100644
+--- a/crates/ui-egui/src/app/commands.rs
++++ b/crates/ui-egui/src/app/commands.rs
+@@ -54,6 +54,24 @@ impl PhotocraftApp {
+         {
+             authorize(id, &params)?;
+         }
++        if id == "tools.longCut.open" {
++            if !params.is_object() || !params.as_object().is_some_and(|o| o.is_empty()) { return Err("Long cutter expects an empty object".into()); }
++            return crate::long_cut::open(self);
++        }
++        if id == "file.export.clipboard" {
++            let result = self.export_document_clipboard(&params);
++            match &result {
++                Ok(_) => {
++                    self.ui.status = tl!("Image copied to clipboard").into();
++                    self.ui.status_error = false;
++                }
++                Err(error) => {
++                    self.ui.status = error.clone();
++                    self.ui.status_error = true;
++                }
++            }
++            return result;
++        }
+         // A new layer while Free Transform is open applies the transform first, as Photoshop does
+         // (#5667): History reads the transform (or Place Embedded), then New Layer. Only for a
+         // command that can run; a transform refused or still being applied keeps the box open and
 diff --git a/crates/ui-egui/src/app/frame.rs b/crates/ui-egui/src/app/frame.rs
-index 07ea17b7..30a2b356 100644
+index 07ea17b7..dc59b7c8 100644
 --- a/crates/ui-egui/src/app/frame.rs
 +++ b/crates/ui-egui/src/app/frame.rs
 @@ -113,7 +113,9 @@ impl PhotocraftApp {
@@ -736,6 +1060,14 @@ index 07ea17b7..30a2b356 100644
              // Files dragged in from another app's window: PhotoCraft comes to the front and takes
              // the keyboard, as Photoshop does, instead of staying behind the source (#5687).
              ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+@@ -309,6 +311,7 @@ impl PhotocraftApp {
+         workspace_ui::windows(self, &ctx);
+         palette::show(self, &ctx);
+         dialogs::show(self, &ctx);
++        crate::long_cut::show(self, &ctx);
+         layers_panel_ui::show_dialog(self, &ctx);
+         rasterize_prompt::run_pending(self, &ctx);
+         jobs_ui::dialog(self, &ctx);
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
 index 12b4a8a7..55fd3806 100644
 --- a/crates/ui-egui/src/canvas.rs
@@ -752,12 +1084,14 @@ index 12b4a8a7..55fd3806 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 00000000..a5d92c67
+index 00000000..f675f50b
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,649 @@
+@@ -0,0 +1,656 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
++use crate::plugin_i18n::text as l;
++macro_rules! pt { ($($arg:tt)*) => { crate::plugin_i18n::text(&format!($($arg)*)) }; }
 +use egui::{Context, Rect, Vec2, pos2, vec2};
 +use serde_json::{Value, json};
 +use std::sync::{Arc, Mutex};
@@ -847,7 +1181,7 @@ index 00000000..a5d92c67
 +        state.input = None;
 +        state.buttons.clear();
 +    }
-+    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() {
++    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
 +        return;
 +    }
 +    let Some(selection) = selection_rect(app, ctx, xf) else { return };
@@ -869,10 +1203,13 @@ index 00000000..a5d92c67
 +                ui.set_width(width - 20.0);
 +                let input = ui.add_enabled(
 +                    !snapshot.busy && !snapshot.loading,
-+                    egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt).hint_text("描述要修改或生成的内容…").char_limit(4000).desired_width(f32::INFINITY),
++                    egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt)
++                        .hint_text(l("Describe what to edit or generate…"))
++                        .char_limit(4000)
++                        .desired_width(f32::INFINITY),
 +                );
 +                input_rect = Some(input.rect);
-+                ui.label("拖入图片作为参考 · 支持多张，数量由 Codex 校验");
++                ui.label(l("Drop reference images here · Multiple images supported; limits checked by Codex"));
 +                button_rects = actions(app, ui, &snapshot);
 +                if !snapshot.references.is_empty() {
 +                    let mut remove = None;
@@ -882,9 +1219,9 @@ index 00000000..a5d92c67
 +                                ui.vertical(|ui| {
 +                                    ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
 +                                    let response = ui
-+                                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(format!("{} ×", index + 1)))
-+                                        .on_hover_text("移除此参考图");
-+                                    button_rects.push((format!("移除参考图{}", index + 1), response.rect));
++                                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
++                                        .on_hover_text(l("Remove this reference image"));
++                                    button_rects.push((pt!("移除参考图{}", index + 1), response.rect));
 +                                    if response.clicked() {
 +                                        remove = Some(index);
 +                                    }
@@ -895,21 +1232,21 @@ index 00000000..a5d92c67
 +                    if let Some(index) = remove {
 +                        let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +                        state.references.remove(index);
-+                        state.message = format!("已选择 {} 张参考图", state.references.len());
++                        state.message = pt!("Reference images selected: {}", state.references.len());
 +                        state.error = false;
 +                    }
 +                }
 +                if snapshot.loading {
-+                    ui.label("正在读取参考图…");
++                    ui.label(l("Loading reference images…"));
 +                }
 +                if snapshot.busy {
 +                    ui.horizontal(|ui| {
 +                        ui.spinner();
-+                        widgets::elided_label(ui, &snapshot.message, width - 65.0);
++                        widgets::elided_label(ui, &l(&snapshot.message), width - 65.0);
 +                    });
 +                } else if !snapshot.message.is_empty() {
-+                    let text = egui::RichText::new(&snapshot.message).color(if snapshot.error { tokens.danger } else { tokens.text_dim });
-+                    ui.add(egui::Label::new(text).truncate()).on_hover_text(&snapshot.message);
++                    let text = egui::RichText::new(l(&snapshot.message)).color(if snapshot.error { tokens.danger } else { tokens.text_dim });
++                    ui.add(egui::Label::new(text).truncate()).on_hover_text(l(&snapshot.message));
 +                }
 +            },
 +        );
@@ -925,16 +1262,18 @@ index 00000000..a5d92c67
 +    ui.horizontal(|ui| {
 +        ui.add_enabled_ui(!status.busy && !status.loading, |ui| {
 +            let has_prompt = !app.ui.codex_ai_prompt.trim().is_empty();
-+            for (label, mode, enabled) in [("局部修改", "fill", has_prompt), ("移除物体", "remove", true), ("生成图片", "generate", has_prompt)] {
-+                let response = ui.add_enabled_ui(enabled, |ui| widgets::secondary_button(ui, label, 76.0)).inner;
-+                buttons.push((label.into(), response.rect));
++            for (label, mode, enabled) in
++                [("Fill selection", "fill", has_prompt), ("Remove object", "remove", true), ("Generate image", "generate", has_prompt)]
++            {
++                let response = ui.add_enabled_ui(enabled, |ui| widgets::secondary_button(ui, &l(label), 76.0)).inner;
++                buttons.push((l(label), response.rect));
 +                if response.clicked() {
 +                    submit(app, ui.ctx(), mode);
 +                }
 +            }
 +            let add = ui
-+                .add_enabled(!app.file_dialog_open(), egui::Button::new(format!("参考图 {} ＋", status.references.len())))
-+                .on_hover_text("一次选择多张图片；在提示词中用参考图1、参考图2指定用途");
++                .add_enabled(!app.file_dialog_open(), egui::Button::new(pt!("Reference images {} +", status.references.len())))
++                .on_hover_text(l("Select multiple images; refer to reference 1, reference 2, etc. in your prompt"));
 +            buttons.push(("添加参考图".into(), add.rect));
 +            if add.clicked() {
 +                let ctx = ui.ctx().clone();
@@ -946,7 +1285,7 @@ index 00000000..a5d92c67
 +                }
 +            }
 +        });
-+        if status.busy && widgets::secondary_button(ui, "取消", 44.0).clicked() {
++        if status.busy && widgets::secondary_button(ui, &l("Cancel"), 44.0).clicked() {
 +            cancel(ui.ctx());
 +        }
 +    });
@@ -1041,7 +1380,7 @@ index 00000000..a5d92c67
 +    {
 +        let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +        if state.busy || state.loading {
-+            return Err("请等待当前任务完成".into());
++            return Err(l("Please wait for the current task to finish"));
 +        }
 +        state.loading = true;
 +    }
@@ -1058,7 +1397,7 @@ index 00000000..a5d92c67
 +                Ok(files) => {
 +                    state.references.extend(files);
 +                    state.error = false;
-+                    state.message = format!("已选择 {} 张参考图", state.references.len());
++                    state.message = pt!("Reference images selected: {}", state.references.len());
 +                }
 +                Err(e) => {
 +                    state.error = true;
@@ -1120,7 +1459,7 @@ index 00000000..a5d92c67
 +        };
 +        total += bytes.len();
 +        if bytes.len() > MAX_REFERENCE_BYTES || total > MAX_REFERENCE_TOTAL {
-+            return Err("超过本地传输内存保护阈值，请分批提交".into());
++            return Err(l("Local transfer memory limit exceeded; submit images in smaller batches"));
 +        }
 +        result.push((path.to_string_lossy().into_owned(), bytes));
 +    }
@@ -1152,19 +1491,19 @@ index 00000000..a5d92c67
 +        }
 +        FileDialogAnswer::Contents(name, bytes) => vec![(name, bytes)],
 +        FileDialogAnswer::ContentsMany(files) => files,
-+        _ => return Err("图片选择结果无效".into()),
++        _ => return Err(l("Invalid image selection")),
 +    };
 +    let mut references = Vec::new();
 +    for (name, bytes) in files {
 +        total += bytes.len();
 +        if bytes.is_empty() || bytes.len() > MAX_REFERENCE_BYTES || total > MAX_REFERENCE_TOTAL {
-+            return Err("超过本地传输内存保护阈值，请分批提交".into());
++            return Err(l("Local transfer memory limit exceeded; submit images in smaller batches"));
 +        }
 +        let options = photocraft_codecs::DecodeOptions {
 +            limits: photocraft_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: 100_000_000, max_alloc: 1024 * 1024 * 1024 },
 +            ..Default::default()
 +        };
-+        let image = photocraft_codecs::decode_with(&bytes, &options).map_err(|e| format!("参考图无法读取：{e}"))?;
++        let image = photocraft_codecs::decode_with(&bytes, &options).map_err(|e| pt!("Cannot read reference image: {e}"))?;
 +        let rgba = image.to_rgba8();
 +        let scale = (80.0 / image.width() as f64).min(80.0 / image.height() as f64).min(1.0);
 +        let w = (image.width() as f64 * scale).round().max(1.0) as usize;
@@ -1207,7 +1546,7 @@ index 00000000..a5d92c67
 +        }
 +        status.busy = true;
 +        status.error = false;
-+        status.message = "正在读取选区…".into();
++        status.message = l("Reading selection…");
 +    }
 +    let ctx = ctx.clone();
 +    std::thread::spawn(move || {
@@ -1236,21 +1575,21 @@ index 00000000..a5d92c67
 +
 +#[cfg(not(target_arch = "wasm32"))]
 +mod native {
-+    use super::{Context, Shared, Value, json};
++    use super::{Context, Shared, Value, json, l};
 +    use std::io::{Read, Write};
 +    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 +    use std::time::{Duration, Instant};
 +
 +    pub(super) fn request(method: &str, path: &str, body: &Value) -> Result<Value, String> {
-+        let port: u16 = std::env::var("PHOTOCRAFT_CODEX_PORT").ok().and_then(|s| s.parse().ok()).ok_or("未配置本地 Codex 服务")?;
-+        let token_file = std::env::var_os("PHOTOCRAFT_CODEX_TOKEN_FILE").ok_or("未配置本地认证文件")?;
-+        let token = std::fs::read_to_string(token_file).map_err(|_| "无法读取本地认证文件")?;
++        let port: u16 = std::env::var("PHOTOCRAFT_CODEX_PORT").ok().and_then(|s| s.parse().ok()).ok_or(l("Local Codex service is not configured"))?;
++        let token_file = std::env::var_os("PHOTOCRAFT_CODEX_TOKEN_FILE").ok_or(l("Local authentication file is not configured"))?;
++        let token = std::fs::read_to_string(token_file).map_err(|_| l("Cannot read local authentication file"))?;
 +        let token = token.trim();
 +        if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
-+            return Err("本地认证文件无效".into());
++            return Err(l("Invalid local authentication file"));
 +        }
 +        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-+        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(3)).map_err(|e| format!("无法连接 Codex 服务：{e}"))?;
++        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(3)).map_err(|e| format!("Cannot connect to Codex service: {e}"))?;
 +        stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
 +        stream.set_write_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
 +        let body = body.to_string();
@@ -1261,10 +1600,10 @@ index 00000000..a5d92c67
 +        stream.write_all(wire.as_bytes()).map_err(|e| e.to_string())?;
 +        let mut response = String::new();
 +        stream.take(65536).read_to_string(&mut response).map_err(|e| e.to_string())?;
-+        let (_, body) = response.split_once("\r\n\r\n").ok_or("Codex 服务返回了无效响应")?;
++        let (_, body) = response.split_once("\r\n\r\n").ok_or(l("Invalid response from Codex service"))?;
 +        let value: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
 +        if value.get("error").and_then(Value::as_bool) == Some(true) && value.get("busy").is_none() {
-+            return Err(value.get("message").and_then(Value::as_str).unwrap_or("Codex 请求失败").into());
++            return Err(value.get("message").and_then(Value::as_str).unwrap_or("Codex request failed").into());
 +        }
 +        Ok(value)
 +    }
@@ -1278,7 +1617,7 @@ index 00000000..a5d92c67
 +            {
 +                let mut status = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +                status.busy = busy;
-+                status.message = response.get("message").and_then(Value::as_str).unwrap_or("处理中…").chars().take(1000).collect();
++                status.message = response.get("message").and_then(Value::as_str).unwrap_or("Processing…").chars().take(1000).collect();
 +                status.error = response.get("error").and_then(Value::as_bool).unwrap_or(false);
 +            }
 +            ctx.request_repaint();
@@ -1286,7 +1625,7 @@ index 00000000..a5d92c67
 +                return Ok(());
 +            }
 +            if started.elapsed() > Duration::from_secs(1200) {
-+                return Err("等待生成超时，请检查本地任务日志".into());
++                return Err(l("Generation timed out; check the local job logs"));
 +            }
 +            std::thread::sleep(Duration::from_millis(500));
 +        }
@@ -1306,12 +1645,12 @@ index 00000000..a5d92c67
 +        assert_eq!(files.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["first.png", "second.png"]);
 +        assert_eq!(base64::engine::general_purpose::STANDARD.decode(files[0].data.as_str()).unwrap(), png);
 +        assert!(files[0].texture.size()[0] <= 80);
-+        let many = crate::FileDialogAnswer::ContentsMany((0..7).map(|i| (format!("{i}.png"), png.clone())).collect());
++        let many = crate::FileDialogAnswer::ContentsMany((0..7).map(|i| (pt!("{i}.png"), png.clone())).collect());
 +        assert_eq!(super::read_references(many, &Context::default(), 0, 0).unwrap().len(), 7);
 +    }
 +    #[test]
 +    fn reference_picker_rejects_invalid_images() {
-+        let selected = crate::FileDialogAnswer::ContentsMany((0..6).map(|i| (format!("{i}.png"), vec![1])).collect());
++        let selected = crate::FileDialogAnswer::ContentsMany((0..6).map(|i| (pt!("{i}.png"), vec![1])).collect());
 +        assert!(super::read_references(selected, &Context::default(), 0, 0).is_err());
 +        let selected = crate::FileDialogAnswer::Contents("bad.png".into(), vec![1, 2, 3]);
 +        assert!(super::read_references(selected, &Context::default(), 0, 0).is_err());
@@ -1341,7 +1680,7 @@ index 00000000..a5d92c67
 +        let image = photocraft_codecs::Image::from_u8(8, 6, photocraft_codecs::ChannelLayout::Rgba, vec![128; 8 * 6 * 4]).unwrap();
 +        let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).unwrap();
 +        let files: Vec<egui::DroppedFileHandle> =
-+            (0..2).map(|i| std::sync::Arc::new(Drop(format!("virtual-{i}.png").into(), png.clone())) as egui::DroppedFileHandle).collect();
++            (0..2).map(|i| std::sync::Arc::new(Drop(pt!("virtual-{i}.png").into(), png.clone())) as egui::DroppedFileHandle).collect();
 +        let ctx = Context::default();
 +        let shared = super::shared(&ctx);
 +        shared.lock().unwrap().rect = Some(Rect::from_min_size(pos2(10.0, 10.0), vec2(100.0, 100.0)));
@@ -1430,7 +1769,7 @@ index 3c7b22dd..581d7d68 100644
          "ui.click" | "ui.move" => click(app, ctx, p, req.method == "ui.click"),
          "ui.key" => key(app, ctx, p),
 diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
-index 4e09d79a..d68fb90a 100644
+index 4e09d79a..c3dad485 100644
 --- a/crates/ui-egui/src/control/inspect.rs
 +++ b/crates/ui-egui/src/control/inspect.rs
 @@ -29,7 +29,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
@@ -1442,7 +1781,7 @@ index 4e09d79a..d68fb90a 100644
          "window": {"width": screen.width(), "height": screen.height(), "pixelsPerPoint": ctx.pixels_per_point()},
          "tool": app.ui.tool,
          "toolOptions": app.ui.tool_options,
-@@ -121,7 +121,11 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
+@@ -121,7 +121,19 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
          "jobs": crate::jobs_ui::inspect(app),
          "histogram": crate::histogram_panel::inspect(app),
          "cameraRaw": app.camera_raw.as_ref().map(|d| d.describe(&app.ui.camera_raw_scope, &app.ui.camera_raw_preview)),
@@ -1450,6 +1789,14 @@ index 4e09d79a..d68fb90a 100644
 +    });
 +    if let Some(object) = state.as_object_mut() {
 +        object.insert("codexAI".into(), crate::codex_ai::inspect(ctx));
++        object.insert("longCut".into(), crate::long_cut::inspect(app));
++        object.insert(
++            "clipboardExport".into(),
++            crate::panels::title_bar::clipboard_button_rect(ctx).map_or(
++                Value::Null,
++                |r| json!({"rect":[r.min.x,r.min.y,r.width(),r.height()],"enabled":crate::menus::is_enabled(app,"file.export.clipboard")}),
++            ),
++        );
 +    }
 +    state
  }
@@ -1468,18 +1815,857 @@ index 5d060f2c..7e72e745 100644
      }
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
+diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
+index ef278822..8b2e5a02 100644
+--- a/crates/ui-egui/src/i18n/zh-hans.tsv
++++ b/crates/ui-egui/src/i18n/zh-hans.tsv
+@@ -1,4 +1,10 @@
+ # Simplified Chinese (zh-hans) catalog. UTF-8, TAB-separated columns:
++@id	file.export.clipboard	导出到剪贴板
++	Copy image	复制图片
++	Copy full canvas to clipboard	复制整张画布到剪贴板
++	Export to Clipboard	导出到剪贴板
++	Image copied to clipboard	图片已复制到剪贴板
++	System image clipboard is unavailable	系统图片剪贴板不可用
+ # context <TAB> English source <TAB> Simplified Chinese translation
+ #
+ # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
+@@ -3202,3 +3208,95 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+ 	Solid Color	纯色
+ 	Tint Color	色调颜色
+ 	Edit Brush…	编辑画笔…
++
++@id	tools.longCut.open	长图切割
++	Long image cutter	长图切割
++
++# Userfull Tools language integration
++	Describe what to edit or generate…	描述要修改或生成的内容…
++	Drop reference images here · Multiple images supported; limits checked by Codex	拖入图片作为参考 · 支持多张，数量由 Codex 校验
++	Remove this reference image	移除此参考图
++	Reference images selected: {}	已选择 {} 张参考图
++	Loading reference images…	正在读取参考图…
++	Fill selection	局部修改
++	Remove object	移除物体
++	Generate image	生成图片
++	Reference images {} +	参考图 {} ＋
++	Select multiple images; refer to reference 1, reference 2, etc. in your prompt	一次选择多张图片；在提示词中用参考图1、参考图2指定用途
++	Please wait for the current task to finish	请等待当前任务完成
++	Local transfer memory limit exceeded; submit images in smaller batches	超过本地传输内存保护阈值，请分批提交
++	Invalid image selection	图片选择结果无效
++	Cannot read reference image: {}	参考图无法读取：{}
++	Reading selection…	正在读取选区…
++	Local Codex service is not configured	未配置本地 Codex 服务
++	Local authentication file is not configured	未配置本地认证文件
++	Cannot read local authentication file	无法读取本地认证文件
++	Invalid local authentication file	本地认证文件无效
++	Cannot connect to Codex service: {}	无法连接 Codex 服务：{}
++	Invalid response from Codex service	Codex 服务返回了无效响应
++	Codex request failed	Codex 请求失败
++	Processing…	处理中…
++	Generation timed out; check the local job logs	等待生成超时，请检查本地任务日志
++	Incompatible cutting plan	切割方案版本、图片尺寸不匹配或切割线过多
++	Cut must be inside the image	切割线必须位于图片内部
++	Auto-save failed: {}	自动保存失败：{}
++	Export worker stopped unexpectedly	导出任务意外结束
++	Canvas snapshot · Click/S: mark · Drag a line: move · Delete: remove nearby line · Ctrl+Z: undo	当前画布快照 · 点击或 S 标记 · 拖动红线调整 · Delete 删除附近线 · Ctrl+Z 撤销
++	Mark	标记
++	Import JSON	导入方案
++	Export JSON	导出方案
++	Export PNG ZIP	导出 PNG ZIP
++	Clear all cutting lines?	清空全部切割线？
++	Confirm	确认
++	Replace the current cutting plan?	替换当前方案？
++	{} × {} px · Slices: {} · {}	{} × {} px · {} 段 · {}
++	Encoding slices…	正在编码切图
++	Cutting plan is too large	切割方案过大
++	Ready	就绪
++	Invalid request parameters.	请求参数无效。
++	Enter an image description first.	请先输入画面描述。
++	An image generation task is already running.	已有生成任务正在运行。
++	The editor is not connected.	编辑器尚未连接。
++	The selection or document changed; submit the request again.	选区或文档已经改变，请重新点击生成。
++	Cancelled	已取消
++	Cancelled.	已取消。
++	Adding a new layer…	正在添加新图层…
++	Added as a new layer · elapsed {} s · Ctrl+Z to undo	已生成到新图层 · 本次耗时 {} 秒 · Ctrl+Z 撤销
++	Unauthenticated request rejected	拒绝未认证请求
++	Browser requests are not accepted	不接受网页请求
++	Unknown operation	未知操作
++	Request is too large	请求过大
++	Request must be an object	请求必须是对象
++	The image service blocked this output; no image was generated.	本次输出被生图服务的安全系统拦截，未生成图片。
++	The account has insufficient image-generation quota; no image was generated.	当前账号的生图额度不足，未生成图片。
++	Too many image-generation requests; try again later.	生图服务请求过多，请稍后再试。
++	Codex sign-in expired; sign in again.	Codex 登录已失效，请重新登录后再试。
++	The image-service connection timed out or was interrupted; check your network or try again later.	连接生图服务超时或中断，未返回图片，请检查网络或稍后重试。
++	The image service returned no image. Try again later; details are in the job logs.	生图服务未返回图片。请稍后重试，详情已保存到任务日志。
++	Codex CLI was not found. Install Node.js, run npm.cmd install -g @openai/codex, and restart.	未找到本机 Codex CLI。请安装 Node.js 后运行 npm.cmd install -g @openai/codex，再重新启动。
++	Invalid Codex proxy configuration; check runtime/codex-proxy.json.	Codex 代理配置无效，请检查 runtime/codex-proxy.json。
++	Processing image request	正在处理生图请求
++	Connection interrupted; reconnecting	连接中断，正在重连
++	Switching to the fallback connection	正在切换备用连接
++	Generating image	正在生成图像
++	Image received; importing…	图像已返回，正在导入…
++	{} · waiting {} s	{} · 已等待 {} 秒
++	Generation exceeded three minutes; check your network or try again later.	生成超过 3 分钟，已停止等待。请检查网络或稍后重试。
++	Invalid edit coordinate mapping.	编辑坐标映射无效。
++	The selection is empty.	选区为空。
++	Unknown mode	未知模式
++	Enter an image description.	请输入画面描述。
++	Feather radius must be between 0 and 64 pixels.	边缘羽化应为 0–64 像素。
++	Open an image in the PhotoCraft editor first.	请先在配套 PhotoCraft 窗口打开图片。
++	Select an area with a marquee or lasso first.	请先使用框选或套索选择要修改的区域。
++	The original document changed or closed. The result was saved but not imported; undo the changes or import it manually.	原文档已改变或关闭。结果已保存，未导入；请撤销改动后重试，或手动导入。
++	Reference images must be a list.	参考图片参数必须为列表。
++	Invalid reference-image parameters.	参考图参数无效。
++	Invalid reference-image name.	参考图名称无效。
++	Reference image exceeds the local 64 MiB transfer guard.	参考图超过本地传输保护阈值 64 MiB。
++	Reference images exceed the local 256 MiB transfer guard.	参考图超过本地传输保护阈值 256 MiB。
++	Invalid reference-image encoding.	参考图编码无效。
++	Reference image exceeds the local size guard.	参考图大小超出限制。
++	Reference image exceeds the local 100-million-pixel decode guard.	参考图超过本地解码保护阈值 1 亿像素。
++
++# Userfull Tools language integration
+diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
+index c0bb1a3a..12c5576a 100644
+--- a/crates/ui-egui/src/i18n/zh-hant.tsv
++++ b/crates/ui-egui/src/i18n/zh-hant.tsv
+@@ -3158,3 +3158,103 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+ 	Solid Color	純色
+ 	Tint Color	色調顏色
+ 	Edit Brush…	編輯筆刷…
++
++# Clipboard export
++@id	file.export.clipboard	匯出到剪貼簿
++	Copy image	複製圖片
++	Copy full canvas to clipboard	複製整張畫布到剪貼簿
++	Export to Clipboard	匯出到剪貼簿
++	Image copied to clipboard	圖片已複製到剪貼簿
++	System image clipboard is unavailable	系統圖片剪貼簿無法使用
++
++@id	tools.longCut.open	長圖切割
++	Long image cutter	長圖切割
++
++# Userfull Tools language integration
++	Describe what to edit or generate…	描述要修改或生成的内容…
++	Drop reference images here · Multiple images supported; limits checked by Codex	拖入图片作为参考 · 支持多张，数量由 Codex 校验
++	Remove this reference image	移除此参考图
++	Reference images selected: {}	已选择 {} 张参考图
++	Loading reference images…	正在读取参考图…
++	Fill selection	局部修改
++	Remove object	移除物体
++	Generate image	生成图片
++	Reference images {} +	参考图 {} ＋
++	Select multiple images; refer to reference 1, reference 2, etc. in your prompt	一次选择多张图片；在提示词中用参考图1、参考图2指定用途
++	Please wait for the current task to finish	请等待当前任务完成
++	Local transfer memory limit exceeded; submit images in smaller batches	超过本地传输内存保护阈值，请分批提交
++	Invalid image selection	图片选择结果无效
++	Cannot read reference image: {}	参考图无法读取：{}
++	Reading selection…	正在读取选区…
++	Local Codex service is not configured	未配置本地 Codex 服务
++	Local authentication file is not configured	未配置本地认证文件
++	Cannot read local authentication file	无法读取本地认证文件
++	Invalid local authentication file	本地认证文件无效
++	Cannot connect to Codex service: {}	无法连接 Codex 服务：{}
++	Invalid response from Codex service	Codex 服务返回了无效响应
++	Codex request failed	Codex 请求失败
++	Processing…	处理中…
++	Generation timed out; check the local job logs	等待生成超时，请检查本地任务日志
++	Incompatible cutting plan	切割方案版本、图片尺寸不匹配或切割线过多
++	Cut must be inside the image	切割线必须位于图片内部
++	Auto-save failed: {}	自动保存失败：{}
++	Export worker stopped unexpectedly	导出任务意外结束
++	Canvas snapshot · Click/S: mark · Drag a line: move · Delete: remove nearby line · Ctrl+Z: undo	当前画布快照 · 点击或 S 标记 · 拖动红线调整 · Delete 删除附近线 · Ctrl+Z 撤销
++	Mark	标记
++	Import JSON	导入方案
++	Export JSON	导出方案
++	Export PNG ZIP	导出 PNG ZIP
++	Clear all cutting lines?	清空全部切割线？
++	Confirm	确认
++	Replace the current cutting plan?	替换当前方案？
++	{} × {} px · Slices: {} · {}	{} × {} px · {} 段 · {}
++	Encoding slices…	正在编码切图
++	Cutting plan is too large	切割方案过大
++	Ready	就绪
++	Invalid request parameters.	请求参数无效。
++	Enter an image description first.	请先输入画面描述。
++	An image generation task is already running.	已有生成任务正在运行。
++	The editor is not connected.	编辑器尚未连接。
++	The selection or document changed; submit the request again.	选区或文档已经改变，请重新点击生成。
++	Cancelled	已取消
++	Cancelled.	已取消。
++	Adding a new layer…	正在添加新图层…
++	Added as a new layer · elapsed {} s · Ctrl+Z to undo	已生成到新图层 · 本次耗时 {} 秒 · Ctrl+Z 撤销
++	Unauthenticated request rejected	拒绝未认证请求
++	Browser requests are not accepted	不接受网页请求
++	Unknown operation	未知操作
++	Request is too large	请求过大
++	Request must be an object	请求必须是对象
++	The image service blocked this output; no image was generated.	本次输出被生图服务的安全系统拦截，未生成图片。
++	The account has insufficient image-generation quota; no image was generated.	当前账号的生图额度不足，未生成图片。
++	Too many image-generation requests; try again later.	生图服务请求过多，请稍后再试。
++	Codex sign-in expired; sign in again.	Codex 登录已失效，请重新登录后再试。
++	The image-service connection timed out or was interrupted; check your network or try again later.	连接生图服务超时或中断，未返回图片，请检查网络或稍后重试。
++	The image service returned no image. Try again later; details are in the job logs.	生图服务未返回图片。请稍后重试，详情已保存到任务日志。
++	Codex CLI was not found. Install Node.js, run npm.cmd install -g @openai/codex, and restart.	未找到本机 Codex CLI。请安装 Node.js 后运行 npm.cmd install -g @openai/codex，再重新启动。
++	Invalid Codex proxy configuration; check runtime/codex-proxy.json.	Codex 代理配置无效，请检查 runtime/codex-proxy.json。
++	Processing image request	正在处理生图请求
++	Connection interrupted; reconnecting	连接中断，正在重连
++	Switching to the fallback connection	正在切换备用连接
++	Generating image	正在生成图像
++	Image received; importing…	图像已返回，正在导入…
++	{} · waiting {} s	{} · 已等待 {} 秒
++	Generation exceeded three minutes; check your network or try again later.	生成超过 3 分钟，已停止等待。请检查网络或稍后重试。
++	Invalid edit coordinate mapping.	编辑坐标映射无效。
++	The selection is empty.	选区为空。
++	Unknown mode	未知模式
++	Enter an image description.	请输入画面描述。
++	Feather radius must be between 0 and 64 pixels.	边缘羽化应为 0–64 像素。
++	Open an image in the PhotoCraft editor first.	请先在配套 PhotoCraft 窗口打开图片。
++	Select an area with a marquee or lasso first.	请先使用框选或套索选择要修改的区域。
++	The original document changed or closed. The result was saved but not imported; undo the changes or import it manually.	原文档已改变或关闭。结果已保存，未导入；请撤销改动后重试，或手动导入。
++	Reference images must be a list.	参考图片参数必须为列表。
++	Invalid reference-image parameters.	参考图参数无效。
++	Invalid reference-image name.	参考图名称无效。
++	Reference image exceeds the local 64 MiB transfer guard.	参考图超过本地传输保护阈值 64 MiB。
++	Reference images exceed the local 256 MiB transfer guard.	参考图超过本地传输保护阈值 256 MiB。
++	Invalid reference-image encoding.	参考图编码无效。
++	Reference image exceeds the local size guard.	参考图大小超出限制。
++	Reference image exceeds the local 100-million-pixel decode guard.	参考图超过本地解码保护阈值 1 亿像素。
++
++# Userfull Tools language integration
+diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
+index 509bfbd2..8176aa44 100644
+--- a/crates/ui-egui/src/input/shortcuts.rs
++++ b/crates/ui-egui/src/input/shortcuts.rs
+@@ -467,6 +467,7 @@ pub(crate) fn handle_forwarded(app: &mut PhotocraftApp, ctx: &egui::Context, eve
+ /// once the main window or no window of the app has the keyboard, or one of its widgets takes
+ /// keyboard focus, so the keys count as released then.
+ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
++    if app.long_cut.is_some() { return; }
+     let held = !ctx.input(|i| i.focused) && crate::panel_docking::other_window_keyboard(ctx) == Some(false);
+     if !held {
+         ctx.data_mut(|d| d.remove_temp::<std::collections::BTreeSet<Key>>(forwarded_down_id()));
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 8165b8a4..c5b0a439 100644
+index 8165b8a4..6e9648be 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
-@@ -26,6 +26,7 @@ macro_rules! tl {
+@@ -26,6 +26,9 @@ macro_rules! tl {
  }
  mod brush_mode_menu;
  pub mod canvas;
 +pub mod codex_ai;
++mod plugin_i18n;
++pub mod long_cut;
  pub mod control;
  pub mod dialogs;
  pub mod dock;
+@@ -672,6 +675,7 @@ pub struct PhotocraftApp {
+     pub(crate) discard: Option<discard_ui::Prompt>,
+     /// The Open or Save dialog in progress, and the action waiting on it (see `file_dialog`).
+     pub(crate) file_dialog: Option<file_dialog::Pending>,
++    pub(crate) long_cut: Option<long_cut::State>,
+     /// A Save As to a layered TIFF parked behind the TIFF Options prompt (see `tiff_options_ui`).
+     pub(crate) tiff_options: Option<tiff_options_ui::Prompt>,
+     /// Where each document was last saved or exported to through a dialog (#1826): its next Save
+diff --git a/crates/ui-egui/src/long_cut.rs b/crates/ui-egui/src/long_cut.rs
+new file mode 100644
+index 00000000..12e19730
+--- /dev/null
++++ b/crates/ui-egui/src/long_cut.rs
+@@ -0,0 +1,566 @@
++//! Independently implemented long-image cutter. No LongPicCutter source is included.
++use crate::plugin_i18n::text as l;
++macro_rules! pt { ($($arg:tt)*) => { crate::plugin_i18n::text(&format!($($arg)*)) }; }
++use crate::PhotocraftApp;
++use serde::{Deserialize, Serialize};
++use serde_json::{Value, json};
++use std::sync::{Arc, mpsc};
++
++const MAX_CUTS: usize = 1024;
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Plan {
++    version: u32,
++    width: u32,
++    height: u32,
++    cuts: Vec<u32>,
++}
++impl Plan {
++    fn parse(bytes: &[u8], width: u32, height: u32) -> Result<Self, String> {
++        if bytes.len() > 65536 {
++            return Err("Plan exceeds 64 KiB".into());
++        }
++        let value: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
++        let mut plan: Self = if value.get("app").and_then(Value::as_str) == Some("LongPicCutter") {
++            serde_json::from_value(json!({"version":value["version"],"width":value["image"]["width"],"height":value["image"]["height"],"cuts":value["lines"]}))
++                .map_err(|e| e.to_string())?
++        } else {
++            serde_json::from_value(value).map_err(|e| e.to_string())?
++        };
++        plan.validate(width, height)?;
++        Ok(plan)
++    }
++    fn external(&self) -> Value {
++        json!({"app":"LongPicCutter","version":1,"image":{"width":self.width,"height":self.height,"name":"PhotoCraft canvas"},"lines":self.cuts})
++    }
++    fn validate(&mut self, width: u32, height: u32) -> Result<(), String> {
++        if self.version != 1 || self.width != width || self.height != height || self.cuts.len() > MAX_CUTS {
++            return Err(l("Incompatible cutting plan"));
++        }
++        if self.cuts.iter().any(|&y| y == 0 || y >= height) {
++            return Err(l("Cut must be inside the image"));
++        }
++        self.cuts.sort_unstable();
++        self.cuts.dedup();
++        Ok(())
++    }
++    fn ranges(&self) -> Vec<(u32, u32)> {
++        let mut edges = vec![0];
++        edges.extend(&self.cuts);
++        edges.push(self.height);
++        edges.windows(2).map(|e| (e[0], e[1])).collect()
++    }
++}
++
++pub struct State {
++    plan: Plan,
++    pixels: Arc<Vec<u8>>,
++    texture: Option<egui::TextureHandle>,
++    undo: Vec<Vec<u32>>,
++    hover: Option<u32>,
++    drag: Option<usize>,
++    drag_before: Vec<u32>,
++    cache: Option<std::path::PathBuf>,
++    message: String,
++    confirm_clear: bool,
++    confirm_import: Option<Plan>,
++    export: Option<mpsc::Receiver<Result<Vec<u8>, String>>>,
++    source_rect: Option<egui::Rect>,
++    maximized: bool,
++}
++
++fn cache_path(width: u32, height: u32, pixels: &[u8]) -> Option<std::path::PathBuf> {
++    use std::hash::{Hash, Hasher};
++    let mut h = std::collections::hash_map::DefaultHasher::new();
++    (width, height, pixels).hash(&mut h);
++    std::env::var_os("PHOTOCRAFT_CONFIG_DIR").map(|p| std::path::PathBuf::from(p).join("long-cut").join(pt!("{:016x}.json", h.finish())))
++}
++
++pub fn open(app: &mut PhotocraftApp) -> Result<Value, String> {
++    // Render through the existing compositor and restore the internal clipboard immediately.
++    let previous = app.session.clipboard.take();
++    let rendered = app.session.execute("file.export.clipboard", json!({}));
++    let clip = app.session.clipboard.take();
++    app.session.clipboard = previous;
++    rendered.map_err(|e| e.to_string())?;
++    let clip = clip.ok_or("No canvas")?;
++    let (width, height) = (clip.bounds.width(), clip.bounds.height());
++    let mut pixels = vec![0; width as usize * height as usize * 4];
++    clip.surface.read_rgba8_into(clip.bounds, pixels.as_chunks_mut::<4>().0);
++    let cache = cache_path(width, height, &pixels);
++    let mut plan = Plan { version: 1, width, height, cuts: vec![] };
++    if let Some(path) = &cache
++        && std::fs::metadata(path).is_ok_and(|m| m.len() <= 65536)
++        && let Ok(bytes) = std::fs::read(path)
++        && bytes.len() <= 65536
++        && let Ok(mut saved) = serde_json::from_slice::<Plan>(&bytes)
++        && saved.validate(width, height).is_ok()
++    {
++        plan = saved;
++    }
++    app.long_cut = Some(State {
++        plan,
++        pixels: Arc::new(pixels),
++        texture: None,
++        undo: vec![],
++        hover: None,
++        drag: None,
++        drag_before: vec![],
++        cache,
++        message: String::new(),
++        confirm_clear: false,
++        confirm_import: None,
++        export: None,
++        source_rect: None,
++        maximized: false,
++    });
++    Ok(json!({"width":width,"height":height,"open":true}))
++}
++
++impl State {
++    fn remember(&mut self) {
++        self.undo.push(self.plan.cuts.clone());
++        if self.undo.len() > 100 {
++            self.undo.remove(0);
++        }
++    }
++    fn persist(&mut self) {
++        if let Some(path) = &self.cache {
++            let result = (|| -> Result<(), String> {
++                std::fs::create_dir_all(path.parent().ok_or("No cache directory")?).map_err(|e| e.to_string())?;
++                let bytes = serde_json::to_vec(&self.plan).map_err(|e| e.to_string())?;
++                std::fs::write(path, bytes).map_err(|e| e.to_string())
++            })();
++            if let Err(e) = result {
++                self.message = pt!("Auto-save failed: {e}");
++            }
++        }
++    }
++    fn add(&mut self, y: u32) {
++        if y > 0 && y < self.plan.height && self.plan.cuts.len() < MAX_CUTS && !self.plan.cuts.contains(&y) {
++            self.remember();
++            self.plan.cuts.push(y);
++            self.plan.cuts.sort_unstable();
++            self.persist();
++        }
++    }
++    fn texture(&mut self, ctx: &egui::Context) -> &egui::TextureHandle {
++        self.texture.get_or_insert_with(|| {
++            let scale = (600.0 / self.plan.width as f64).min(8192.0 / self.plan.height as f64).min(1.0);
++            let w = (self.plan.width as f64 * scale).round().max(1.0) as usize;
++            let h = (self.plan.height as f64 * scale).round().max(1.0) as usize;
++            let mut preview = vec![0; w * h * 4];
++            for y in 0..h {
++                for x in 0..w {
++                    let source = ((y * self.plan.height as usize / h) * self.plan.width as usize + x * self.plan.width as usize / w) * 4;
++                    preview[(y * w + x) * 4..(y * w + x + 1) * 4].copy_from_slice(&self.pixels[source..source + 4]);
++                }
++            }
++            ctx.load_texture("long-cut-preview", egui::ColorImage::from_rgba_unmultiplied([w, h], &preview), egui::TextureOptions::LINEAR)
++        })
++    }
++}
++
++fn save(app: &mut PhotocraftApp, name: &str, bytes: Vec<u8>) -> Result<Value, String> {
++    app.pick_save(name, move |app, path| {
++        let write = app.services.write.as_mut().ok_or("File writing is unavailable")?;
++        write(&path, &bytes)?;
++        Ok(json!({"saved":path}))
++    })
++}
++
++pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
++    let Some(mut state) = app.long_cut.take() else { return };
++    let mut opened = true;
++    let mut action = "";
++    let mut ready = None;
++    if let Some(rx) = &state.export {
++        match rx.try_recv() {
++            Ok(result) => {
++                ready = Some(result);
++                state.export = None;
++            }
++            Err(mpsc::TryRecvError::Disconnected) => {
++                state.message = l("Export worker stopped unexpectedly");
++                state.export = None;
++            }
++            Err(mpsc::TryRecvError::Empty) => {
++                ctx.request_repaint_after(std::time::Duration::from_millis(100));
++            }
++        }
++    }
++    let screen = ctx.content_rect();
++    let size = egui::vec2((screen.width() - 40.0).max(240.0), (screen.height() - 100.0).max(220.0));
++    let mut window = egui::Window::new(l("Long image cutter"))
++        .id(egui::Id::unique(if state.maximized { "long-cut-max" } else { "long-cut-large" }))
++        .open(&mut opened)
++        .default_pos(screen.min + egui::vec2(20.0, 20.0))
++        .default_size(size)
++        .resizable(true);
++    if state.maximized {
++        window = window.fixed_rect(egui::Rect::from_min_size(
++            screen.min + egui::vec2(8.0, 8.0),
++            egui::vec2((screen.width() - 28.0).max(200.0), (screen.height() - 64.0).max(180.0)),
++        ));
++    }
++    window.show(ctx, |ui| {
++        ui.label(l("Canvas snapshot · Click/S: mark · Drag a line: move · Delete: remove nearby line · Ctrl+Z: undo"));
++        ui.horizontal_wrapped(|ui| {
++            if ui.button(if state.maximized { l("Restore") } else { l("Maximize") }).clicked() {
++                state.maximized = !state.maximized;
++            }
++            if ui.button(l("Mark")).clicked()
++                && let Some(y) = state.hover
++            {
++                state.add(y);
++            }
++            if ui.add_enabled(!state.undo.is_empty(), egui::Button::new(l("Undo"))).clicked() {
++                action = "undo";
++            }
++            if ui.button(l("Clear")).clicked() {
++                state.confirm_clear = true;
++            }
++            if ui.button(l("Import JSON")).clicked() {
++                action = "import";
++            }
++            if ui.button(l("Export JSON")).clicked() {
++                action = "plan";
++            }
++            if ui.add_enabled(state.export.is_none(), egui::Button::new(l("Export PNG ZIP"))).clicked() {
++                action = "zip";
++            }
++        });
++        if state.confirm_clear {
++            ui.horizontal(|ui| {
++                ui.label(l("Clear all cutting lines?"));
++                if ui.button(l("Confirm")).clicked() {
++                    state.remember();
++                    state.plan.cuts.clear();
++                    state.persist();
++                    state.confirm_clear = false;
++                }
++                if ui.button(l("Cancel")).clicked() {
++                    state.confirm_clear = false;
++                }
++            });
++        }
++        if state.confirm_import.is_some() {
++            ui.horizontal(|ui| {
++                ui.label(l("Replace the current cutting plan?"));
++                if ui.button(l("Replace")).clicked() {
++                    state.remember();
++                    if let Some(plan) = state.confirm_import.take() {
++                        state.plan = plan;
++                    }
++                    state.persist();
++                }
++                if ui.button(l("Cancel")).clicked() {
++                    state.confirm_import = None;
++                }
++            });
++        }
++        ui.label(pt!("{} × {} px · Slices: {} · {}", state.plan.width, state.plan.height, state.plan.cuts.len() + 1, state.message));
++        if state.export.is_some() {
++            ui.spinner();
++            ui.label(l("Encoding slices…"));
++        }
++        let texture = state.texture(ctx).id();
++        let width = (ui.available_width() - 18.0).max(100.0);
++        let viewport_height = (ui.available_height() - 8.0).max(100.0);
++        let height = width * state.plan.height as f32 / state.plan.width as f32;
++        egui::ScrollArea::both().id_salt("long-cut-source").max_height(viewport_height).show(ui, |ui| {
++            let response = ui.add(egui::Image::new((texture, egui::vec2(width, height))).sense(egui::Sense::click_and_drag()));
++            let rect = response.rect;
++            state.source_rect = Some(rect);
++            let position = ctx.pointer_hover_pos().filter(|p| rect.contains(*p) && ui.clip_rect().contains(*p));
++            if let Some(pos) = position {
++                let y = ((pos.y - rect.top()) / height * state.plan.height as f32).floor().clamp(0.0, state.plan.height as f32) as u32;
++                state.hover = Some(y);
++                let near = state.plan.cuts.iter().position(|&c| (c as f32 - y as f32).abs() * height / state.plan.height as f32 <= 8.0);
++                if response.drag_started() {
++                    state.drag = ctx.input(|i| i.pointer.press_origin()).and_then(|start| {
++                        state.plan.cuts.iter().position(|&row| (rect.top() + row as f32 / state.plan.height as f32 * height - start.y).abs() <= 8.0)
++                    });
++                    state.drag_before = state.plan.cuts.clone();
++                }
++                if response.dragged()
++                    && let Some(index) = state.drag
++                {
++                    let low = if index == 0 { 1 } else { state.plan.cuts[index - 1] + 1 };
++                    let high = state.plan.cuts.get(index + 1).copied().unwrap_or(state.plan.height) - 1;
++                    state.plan.cuts[index] = y.clamp(low, high);
++                }
++                if response.clicked() || (!ctx.egui_wants_keyboard_input() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::S))) {
++                    state.add(y);
++                }
++                if !ctx.egui_wants_keyboard_input()
++                    && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
++                    && let Some(index) = near
++                {
++                    state.remember();
++                    state.plan.cuts.remove(index);
++                    state.persist();
++                }
++                let py = rect.top() + y as f32 / state.plan.height as f32 * height;
++                ui.painter().hline(rect.x_range(), py, egui::Stroke::new(1.0, egui::Color32::LIGHT_BLUE));
++                response.clone().on_hover_text(pt!("y = {y} px"));
++            }
++            if response.drag_stopped() && state.drag.take().is_some() {
++                state.undo.push(std::mem::take(&mut state.drag_before));
++                state.plan.cuts.sort_unstable();
++                state.plan.cuts.dedup();
++                state.persist();
++            }
++            for &y in &state.plan.cuts {
++                let py = rect.top() + y as f32 / state.plan.height as f32 * height;
++                ui.painter().hline(rect.x_range(), py, egui::Stroke::new(2.0, egui::Color32::RED));
++            }
++            if position.is_some() && !ctx.egui_wants_keyboard_input() {
++                if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z)) {
++                    action = "undo";
++                }
++                if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
++                    action = "plan";
++                }
++            }
++        });
++    });
++    if action == "undo"
++        && let Some(cuts) = state.undo.pop()
++    {
++        state.plan.cuts = cuts;
++        state.persist();
++    }
++    if action == "zip" {
++        let (tx, rx) = mpsc::channel();
++        state.export = Some(rx);
++        let plan = state.plan.clone();
++        let pixels = state.pixels.clone();
++        let repaint = ctx.clone();
++        #[cfg(not(target_arch = "wasm32"))]
++        std::thread::spawn(move || {
++            let _ = tx.send(archive(&plan, &pixels));
++            repaint.request_repaint();
++        });
++        #[cfg(target_arch = "wasm32")]
++        {
++            let _ = tx.send(archive(&plan, &pixels));
++            repaint.request_repaint();
++        }
++    }
++    let plan_bytes = (action == "plan").then(|| serde_json::to_vec_pretty(&state.plan.external()).map_err(|e| e.to_string()));
++    app.long_cut = opened.then_some(state);
++    let result = if action == "import" {
++        app.pick_file_bytes_filtered(&["json"], |app, _, bytes| {
++            if bytes.len() > 65536 {
++                return Err(l("Cutting plan is too large"));
++            }
++            let state = app.long_cut.as_mut().ok_or("Cutter was closed")?;
++            let plan = Plan::parse(&bytes, state.plan.width, state.plan.height)?;
++            state.confirm_import = Some(plan);
++            Ok(Value::Null)
++        })
++    } else if let Some(bytes) = plan_bytes {
++        bytes.and_then(|b| save(app, "cut-plan.json", b))
++    } else if let Some(bytes) = ready {
++        bytes.and_then(|b| save(app, "slices.zip", b))
++    } else {
++        Ok(Value::Null)
++    };
++    if let Err(e) = result
++        && e != crate::file_dialog::CANCELLED
++        && let Some(state) = app.long_cut.as_mut()
++    {
++        state.message = e;
++    }
++}
++
++/// Standard stored ZIP, PNG payloads are already compressed. Bounded to classic ZIP limits.
++fn archive(plan: &Plan, pixels: &[u8]) -> Result<Vec<u8>, String> {
++    let mut checked = plan.clone();
++    checked.validate(plan.width, plan.height)?;
++    let plan = &checked;
++    if pixels.len() != plan.width as usize * plan.height as usize * 4 {
++        return Err("Invalid RGBA length".into());
++    }
++    let mut output = Vec::new();
++    let mut directory = Vec::new();
++    for (index, (a, b)) in plan.ranges().into_iter().enumerate() {
++        let stride = plan.width as usize * 4;
++        let image = photocraft_codecs::Image::from_u8(
++            plan.width,
++            b - a,
++            photocraft_codecs::ChannelLayout::Rgba,
++            pixels[a as usize * stride..b as usize * stride].to_vec(),
++        )
++        .map_err(|e| e.to_string())?;
++        let bytes = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).map_err(|e| e.to_string())?;
++        if output.len() + bytes.len() > 512 * 1024 * 1024 {
++            return Err("ZIP exceeds 512 MiB limit".into());
++        }
++        let name = pt!("slice-{:03}.png", index + 1);
++        let offset = output.len() as u32;
++        let size = bytes.len() as u32;
++        let mut crc = flate2::Crc::new();
++        crc.update(&bytes);
++        let crc = crc.sum();
++        put32(&mut output, 0x04034b50);
++        put16(&mut output, 20);
++        put16(&mut output, 0);
++        put16(&mut output, 0);
++        put16(&mut output, 0);
++        put16(&mut output, 33);
++        put32(&mut output, crc);
++        put32(&mut output, size);
++        put32(&mut output, size);
++        put16(&mut output, name.len() as u16);
++        put16(&mut output, 0);
++        output.extend(name.as_bytes());
++        output.extend(bytes);
++        put32(&mut directory, 0x02014b50);
++        put16(&mut directory, 20);
++        put16(&mut directory, 20);
++        put16(&mut directory, 0);
++        put16(&mut directory, 0);
++        put16(&mut directory, 0);
++        put16(&mut directory, 33);
++        put32(&mut directory, crc);
++        put32(&mut directory, size);
++        put32(&mut directory, size);
++        put16(&mut directory, name.len() as u16);
++        put16(&mut directory, 0);
++        put16(&mut directory, 0);
++        put16(&mut directory, 0);
++        put16(&mut directory, 0);
++        put32(&mut directory, 0);
++        put32(&mut directory, offset);
++        directory.extend(name.as_bytes());
++    }
++    let offset = output.len() as u32;
++    let size = directory.len() as u32;
++    output.extend(directory);
++    put32(&mut output, 0x06054b50);
++    put16(&mut output, 0);
++    put16(&mut output, 0);
++    put16(&mut output, plan.cuts.len() as u16 + 1);
++    put16(&mut output, plan.cuts.len() as u16 + 1);
++    put32(&mut output, size);
++    put32(&mut output, offset);
++    put16(&mut output, 0);
++    Ok(output)
++}
++fn put16(out: &mut Vec<u8>, n: u16) {
++    out.extend(n.to_le_bytes());
++}
++fn put32(out: &mut Vec<u8>, n: u32) {
++    out.extend(n.to_le_bytes());
++}
++
++pub fn inspect(app: &PhotocraftApp) -> Value {
++    app.long_cut
++        .as_ref()
++        .map(|s| json!({"open":true,"width":s.plan.width,"height":s.plan.height,"cuts":s.plan.cuts,"pieces":s.plan.cuts.len()+1,"busy":s.export.is_some(),"sourceRect":s.source_rect.map(|r|[r.min.x,r.min.y,r.width(),r.height()])}))
++        .unwrap_or(json!({"open":false}))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn fast_drag_uses_press_origin_and_cannot_cross_adjacent_cuts() {
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        app.run("file.new", json!({"width":240,"height":1200})).unwrap();
++        open(&mut app).unwrap();
++        {
++            let state = app.long_cut.as_mut().unwrap();
++            state.cache = None;
++            state.add(20);
++            state.add(40);
++        }
++        let ctx = egui::Context::default();
++        let draw = |app: &mut PhotocraftApp, events| {
++            let raw =
++                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0))), events, ..Default::default() };
++            let mut out = ctx.run_ui(raw, |_| show(app, &ctx));
++            out.textures_delta.clear();
++        };
++        draw(&mut app, vec![]);
++        draw(&mut app, vec![]);
++        let rect = app.long_cut.as_ref().unwrap().source_rect.unwrap();
++        let point = |row: f32| egui::pos2(rect.center().x, rect.top() + row / 1200.0 * rect.height());
++        let press = point(20.0);
++        let destination = point(50.0);
++        draw(
++            &mut app,
++            vec![
++                egui::Event::PointerMoved(press),
++                egui::Event::PointerButton { pos: press, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
++            ],
++        );
++        draw(&mut app, vec![egui::Event::PointerMoved(destination)]);
++        draw(
++            &mut app,
++            vec![egui::Event::PointerButton { pos: destination, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE }],
++        );
++        assert_eq!(app.long_cut.as_ref().unwrap().plan.cuts, vec![39, 40]);
++    }
++    #[test]
++    fn imports_longpic_plans_and_rejects_fractional_or_foreign_dimensions() {
++        let p = Plan { version: 1, width: 24, height: 120, cuts: vec![20, 80] };
++        let bytes = serde_json::to_vec(&p.external()).unwrap();
++        assert_eq!(Plan::parse(&bytes, 24, 120).unwrap().cuts, vec![20, 80]);
++        assert!(Plan::parse(&bytes, 25, 120).is_err());
++        let invalid = br#"{"app":"LongPicCutter","version":1,"image":{"width":24,"height":120},"lines":[1.5]}"#;
++        assert!(Plan::parse(invalid, 24, 120).is_err());
++    }
++    #[test]
++    fn snapshot_preserves_clipboard_selection_document_and_history() {
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        app.run("file.new", json!({"width":3,"height":2})).unwrap();
++        app.session.execute("file.export.clipboard", json!({})).unwrap();
++        let clipboard_bounds = app.session.clipboard.as_ref().unwrap().bounds;
++        app.run("file.new", json!({"width":24,"height":120})).unwrap();
++        app.run("select.rect", json!({"x":2,"y":3,"width":5,"height":9})).unwrap();
++        let before = app.session.execute("document.inspect", json!({})).unwrap();
++        open(&mut app).unwrap();
++        let after = app.session.execute("document.inspect", json!({})).unwrap();
++        assert_eq!(before, after);
++        assert_eq!(app.session.clipboard.as_ref().unwrap().bounds, clipboard_bounds);
++        let state = app.long_cut.as_mut().unwrap();
++        state.cache = None;
++        state.add(30);
++        state.add(30);
++        state.add(0);
++        state.add(120);
++        assert_eq!(state.plan.cuts, vec![30]);
++        state.plan.cuts = state.undo.pop().unwrap();
++        assert!(state.plan.cuts.is_empty());
++    }
++    #[test]
++    fn cuts_cover_every_row_and_reject_foreign_plans() {
++        let mut p = Plan { version: 1, width: 4, height: 7, cuts: vec![5, 2, 2] };
++        p.validate(4, 7).unwrap();
++        assert_eq!(p.ranges(), vec![(0, 2), (2, 5), (5, 7)]);
++        assert!(p.validate(5, 7).is_err());
++        p.cuts = vec![0];
++        assert!(p.validate(4, 7).is_err());
++    }
++    #[test]
++    fn png_zip_contains_original_rows_without_gaps() {
++        let p = Plan { version: 1, width: 3, height: 7, cuts: vec![2, 5] };
++        let pixels: Vec<u8> = (0..21).flat_map(|i| [i as u8, 80, 100, 128]).collect();
++        let zip = archive(&p, &pixels).unwrap();
++        let mut pos = 0;
++        let mut reconstructed = vec![];
++        while &zip[pos..pos + 4] == b"PK\x03\x04" {
++            let len = u32::from_le_bytes(zip[pos + 18..pos + 22].try_into().unwrap()) as usize;
++            let names = u16::from_le_bytes(zip[pos + 26..pos + 28].try_into().unwrap()) as usize;
++            let start = pos + 30 + names;
++            let image = photocraft_codecs::decode(&zip[start..start + len]).unwrap();
++            reconstructed.extend(image.to_rgba8());
++            pos = start + len;
++        }
++        assert_eq!(reconstructed, pixels);
++        assert_eq!(&zip[zip.len() - 22..zip.len() - 18], b"PK\x05\x06");
++    }
++}
+diff --git a/crates/ui-egui/src/menu_catalog.rs b/crates/ui-egui/src/menu_catalog.rs
+index 1d980286..e4227ef2 100644
+--- a/crates/ui-egui/src/menu_catalog.rs
++++ b/crates/ui-egui/src/menu_catalog.rs
+@@ -19,6 +19,8 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
+     (&["File"], "Revert", Some("F12"), "file.revert"),
+     (&["File"], "---", None, "---"),
+     (&["File", "Export"], "Quick Export as PNG", None, "file.export.quickExportAsPng"),
++    (&["File", "Export"], "Export to Clipboard", None, "file.export.clipboard"),
++    (&["File", "Export"], "Long image cutter", None, "tools.longCut.open"),
+     (&["File", "Export"], "Export As…", Some("Cmd+Alt+Shift+W"), "file.export.exportAs"),
+     (&["File", "Export"], "Export Preferences…", None, "file.export.exportPreferences"),
+     (&["File", "Export"], "---", None, "---"),
+diff --git a/crates/ui-egui/src/menus/state.rs b/crates/ui-egui/src/menus/state.rs
+index c932ca09..c97f4694 100644
+--- a/crates/ui-egui/src/menus/state.rs
++++ b/crates/ui-egui/src/menus/state.rs
+@@ -68,6 +68,8 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
+         i if i.starts_with("window.theme.") => true,
+         // Interface brightness works with or without a document, as in Photoshop.
+         "view.darkenInterface" | "view.lightenInterface" => true,
++        "tools.longCut.open" => app.session.active().is_some(),
++        "file.export.clipboard" => app.session.active().is_some() && app.services.clipboard_set_image.is_some(),
+         "file.save" | "file.saveAs" | "file.export.exportAs" | "file.export.quickExportAsPng" => {
+             app.session.active().is_some() && app.services.export.is_some()
+         }
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui.rs b/crates/ui-egui/src/panels/layer_menu_ui.rs
 index f274e286..d5ecd95b 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui.rs
@@ -1608,6 +2794,345 @@ index a7ab70a7..3acdcc91 100644
  #[test]
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
+diff --git a/crates/ui-egui/src/panels/title_bar.rs b/crates/ui-egui/src/panels/title_bar.rs
+index fd760ec7..cb606e06 100644
+--- a/crates/ui-egui/src/panels/title_bar.rs
++++ b/crates/ui-egui/src/panels/title_bar.rs
+@@ -8,6 +8,7 @@ use super::{PhotocraftApp, Sense, Tokens, icons, theme, vec2, widgets};
+ /// title bar (Windows and Linux, `system_title_bar`) the OS draws its own icon and title, so the
+ /// in-app bar shows menus and workspace controls only: no brand mark, no centred title.
+ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
++    ui.ctx().data_mut(|d| d.remove::<egui::Rect>(clipboard_button_id()));
+     let t = Tokens::get(ui.ctx());
+     let custom = app.custom_titlebar;
+     let system = system_title_bar(app);
+@@ -94,14 +95,18 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                     // (Preferences), then search (Edit › Search), and narrows the switcher
+                     // (Window › Workspace) before anything runs over.
+                     let room = ui.available_width();
+-                    let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
++                    let cutter_shown = room >= WORKSPACE_MIN + 2.0 * ICON_SLOT + COPY_SLOT + 105.0;
++                    let room = room - if cutter_shown { 105.0 } else { 0.0 };
++                    let copy_shown = room >= WORKSPACE_MIN + 2.0 * ICON_SLOT + COPY_SLOT;
++                    let controls_room = room - if copy_shown { COPY_SLOT } else { 0.0 };
++                    let icons_shown: u8 = if controls_room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
+                         2
+-                    } else if room >= WORKSPACE_MIN + ICON_SLOT {
++                    } else if controls_room >= WORKSPACE_MIN + ICON_SLOT {
+                         1
+                     } else {
+                         0
+                     };
+-                    let ws_width = (room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
++                    let ws_width = (controls_room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
+                     if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", tl!("Workspace"), &mut ws, &opts, ws_width) {
+                         app.ui.workspace = ws;
+                         crate::menus::apply_workspace(app);
+@@ -124,6 +129,23 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                         }
+                         button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
+                     }
++                    if copy_shown {
++                        let enabled = crate::menus::is_enabled(app, "file.export.clipboard");
++                        let button = ui
++                            .add_enabled(enabled, egui::Button::new(tl!("Copy image")).min_size(vec2(COPY_SLOT - 6.0, 24.0)))
++                            .on_hover_text(tl!("Copy full canvas to clipboard"));
++                        ui.ctx().data_mut(|d| d.insert_temp(clipboard_button_id(), button.rect));
++                        if button.clicked() {
++                            let _ = app.run("file.export.clipboard", serde_json::json!({}));
++                        }
++                    }
++                    if cutter_shown
++                        && ui.add_enabled(app.session.active().is_some(), egui::Button::new(tl!("Long image cutter"))).clicked()
++                        && let Err(e) = app.run("tools.longCut.open", serde_json::json!({}))
++                    {
++                        app.ui.status = e;
++                        app.ui.status_error = true;
++                    }
+                     if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
+                 };
+                 free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
+@@ -199,6 +221,15 @@ const TITLE_GAP: f32 = 16.0;
+ const WORKSPACE_MIN: f32 = 90.0;
+ 
+ const ICON_SLOT: f32 = 34.0;
++const COPY_SLOT: f32 = 94.0;
++
++fn clipboard_button_id() -> egui::Id {
++    egui::Id::unique("photocraft-titlebar-clipboard")
++}
++
++pub(crate) fn clipboard_button_rect(ctx: &egui::Context) -> Option<egui::Rect> {
++    ctx.data(|d| d.get_temp(clipboard_button_id()))
++}
+ 
+ /// Left edge for a title `width` wide: centred on `center` when it fits in the free gap from
+ /// `left` to `right` (the menus' and the controls' facing edges, whichever side each is on),
+@@ -213,3 +244,49 @@ pub(super) fn title_x(center: f32, left: f32, right: f32, width: f32) -> Option<
+     }
+     Some((center - width / 2.0).clamp(lo, hi))
+ }
++
++#[cfg(test)]
++mod clipboard_button_tests {
++    use super::*;
++    use std::sync::{Arc, Mutex};
++
++    #[test]
++    fn titlebar_clipboard_button_exports_and_disables_without_a_document() {
++        let copied = Arc::new(Mutex::new(None));
++        let output = copied.clone();
++        let services = crate::Services {
++            clipboard_set_image: Some(Box::new(move |w, h, bytes| {
++                *output.lock().unwrap() = Some((w, h, bytes.len()));
++                Ok(())
++            })),
++            ..Default::default()
++        };
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services);
++        let ctx = egui::Context::default();
++        PhotocraftApp::setup_context(&ctx, Default::default());
++        let draw = |app: &mut PhotocraftApp, events| {
++            let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1440.0, 900.0))), events, ..Default::default() };
++            let mut out = ctx.run_ui(input, |ui| crate::i18n::with_language(crate::i18n::Lang::EN, || title_bar(app, ui)));
++            out.textures_delta.clear();
++        };
++        draw(&mut app, vec![]);
++        assert!(clipboard_button_rect(&ctx).is_some());
++        assert!(!crate::menus::is_enabled(&app, "file.export.clipboard"));
++        app.run("file.new", serde_json::json!({"width":16,"height":12})).unwrap();
++        draw(&mut app, vec![]);
++        let pos = clipboard_button_rect(&ctx).unwrap().center();
++        let revision = app.session.active().unwrap().revision;
++        for pressed in [true, false] {
++            draw(
++                &mut app,
++                vec![
++                    egui::Event::PointerMoved(pos),
++                    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE },
++                ],
++            );
++        }
++        assert_eq!(*copied.lock().unwrap(), Some((16, 12, 16 * 12 * 4)));
++        assert_eq!(app.session.active().unwrap().revision, revision);
++        assert!(!app.ui.status_error);
++    }
++}
+diff --git a/crates/ui-egui/src/plugin_i18n.rs b/crates/ui-egui/src/plugin_i18n.rs
+new file mode 100644
+index 00000000..b400aa03
+--- /dev/null
++++ b/crates/ui-egui/src/plugin_i18n.rs
+@@ -0,0 +1,209 @@
++//! Custom tools share the editor's active language and translation catalogs.
++pub(crate) fn text(source: &str) -> String {
++    translate(&canonical(source, 0), 0)
++}
++fn translate(source: &str, depth: u8) -> String {
++    let lang = crate::i18n::current();
++    let direct = crate::i18n::tr(lang, source);
++    if direct != source {
++        return direct.to_owned();
++    }
++    if depth > 3 {
++        return source.to_owned();
++    }
++    for template in TEMPLATES {
++        if let Some(values) = capture(template, source) {
++            let translated = crate::i18n::tr(lang, template);
++            let mut pieces = translated.split("{}");
++            let mut result = pieces.next().unwrap_or("").to_owned();
++            for (value, part) in values.iter().zip(pieces) {
++                result.push_str(&translate(value, depth + 1));
++                result.push_str(part);
++            }
++            return result;
++        }
++    }
++    source.to_owned()
++}
++fn capture<'a>(pattern: &str, source: &'a str) -> Option<Vec<&'a str>> {
++    let parts: Vec<_> = pattern.split("{}").collect();
++    let mut remaining = source.strip_prefix(parts[0])?;
++    let mut values = Vec::new();
++    for (index, part) in parts.iter().enumerate().skip(1) {
++        if index == parts.len() - 1 {
++            values.push(remaining.strip_suffix(part)?);
++            remaining = "";
++        } else {
++            let at = remaining.find(part)?;
++            values.push(&remaining[..at]);
++            remaining = &remaining[at + part.len()..];
++        }
++    }
++    if remaining.is_empty() { Some(values) } else { None }
++}
++const TEMPLATES: &[&str] = &[
++    "Reference images selected: {}",
++    "Reference images {} +",
++    "Cannot read reference image: {}",
++    "Cannot connect to Codex service: {}",
++    "Auto-save failed: {}",
++    "{} × {} px · Slices: {} · {}",
++    "Added as a new layer · elapsed {} s · Ctrl+Z to undo",
++    "{} · waiting {} s",
++];
++
++fn canonical(source: &str, depth: u8) -> String {
++    if depth > 3 {
++        return source.to_owned();
++    }
++    for (chinese, english) in PAIRS {
++        if source == *chinese {
++            return english.to_string();
++        }
++        if chinese.contains("{}")
++            && let Some(values) = capture(chinese, source)
++        {
++            let mut pieces = english.split("{}");
++            let mut out = pieces.next().unwrap_or("").to_owned();
++            for (value, part) in values.iter().zip(pieces) {
++                out.push_str(&canonical(value, depth + 1));
++                out.push_str(part);
++            }
++            return out;
++        }
++    }
++    source.to_owned()
++}
++const PAIRS: &[(&str, &str)] = &[
++    ("描述要修改或生成的内容…", "Describe what to edit or generate…"),
++    ("拖入图片作为参考 · 支持多张，数量由 Codex 校验", "Drop reference images here · Multiple images supported; limits checked by Codex"),
++    ("移除此参考图", "Remove this reference image"),
++    ("已选择 {} 张参考图", "Reference images selected: {}"),
++    ("正在读取参考图…", "Loading reference images…"),
++    ("局部修改", "Fill selection"),
++    ("移除物体", "Remove object"),
++    ("生成图片", "Generate image"),
++    ("参考图 {} ＋", "Reference images {} +"),
++    ("一次选择多张图片；在提示词中用参考图1、参考图2指定用途", "Select multiple images; refer to reference 1, reference 2, etc. in your prompt"),
++    ("取消", "Cancel"),
++    ("请等待当前任务完成", "Please wait for the current task to finish"),
++    ("超过本地传输内存保护阈值，请分批提交", "Local transfer memory limit exceeded; submit images in smaller batches"),
++    ("图片选择结果无效", "Invalid image selection"),
++    ("参考图无法读取：{}", "Cannot read reference image: {}"),
++    ("正在读取选区…", "Reading selection…"),
++    ("未配置本地 Codex 服务", "Local Codex service is not configured"),
++    ("未配置本地认证文件", "Local authentication file is not configured"),
++    ("无法读取本地认证文件", "Cannot read local authentication file"),
++    ("本地认证文件无效", "Invalid local authentication file"),
++    ("无法连接 Codex 服务：{}", "Cannot connect to Codex service: {}"),
++    ("Codex 服务返回了无效响应", "Invalid response from Codex service"),
++    ("Codex 请求失败", "Codex request failed"),
++    ("处理中…", "Processing…"),
++    ("等待生成超时，请检查本地任务日志", "Generation timed out; check the local job logs"),
++    ("切割方案版本、图片尺寸不匹配或切割线过多", "Incompatible cutting plan"),
++    ("切割线必须位于图片内部", "Cut must be inside the image"),
++    ("自动保存失败：{}", "Auto-save failed: {}"),
++    ("导出任务意外结束", "Export worker stopped unexpectedly"),
++    ("长图切割", "Long image cutter"),
++    (
++        "当前画布快照 · 点击或 S 标记 · 拖动红线调整 · Delete 删除附近线 · Ctrl+Z 撤销",
++        "Canvas snapshot · Click/S: mark · Drag a line: move · Delete: remove nearby line · Ctrl+Z: undo",
++    ),
++    ("还原", "Restore"),
++    ("最大化", "Maximize"),
++    ("标记", "Mark"),
++    ("撤销", "Undo"),
++    ("清空", "Clear"),
++    ("导入方案", "Import JSON"),
++    ("导出方案", "Export JSON"),
++    ("导出 PNG ZIP", "Export PNG ZIP"),
++    ("清空全部切割线？", "Clear all cutting lines?"),
++    ("确认", "Confirm"),
++    ("取消", "Cancel"),
++    ("替换当前方案？", "Replace the current cutting plan?"),
++    ("替换", "Replace"),
++    ("{} × {} px · {} 段 / pieces · {}", "{} × {} px · Slices: {} · {}"),
++    ("正在编码切图", "Encoding slices…"),
++    ("切割方案过大", "Cutting plan is too large"),
++    ("就绪", "Ready"),
++    ("请求参数无效。", "Invalid request parameters."),
++    ("请先输入画面描述。", "Enter an image description first."),
++    ("已有生成任务正在运行。", "An image generation task is already running."),
++    ("编辑器尚未连接。", "The editor is not connected."),
++    ("选区或文档已经改变，请重新点击生成。", "The selection or document changed; submit the request again."),
++    ("已取消", "Cancelled"),
++    ("已取消。", "Cancelled."),
++    ("正在添加新图层…", "Adding a new layer…"),
++    ("已生成到新图层 · 本次耗时 {} 秒 · Ctrl+Z 撤销", "Added as a new layer · elapsed {} s · Ctrl+Z to undo"),
++    ("拒绝未认证请求", "Unauthenticated request rejected"),
++    ("不接受网页请求", "Browser requests are not accepted"),
++    ("未知操作", "Unknown operation"),
++    ("请求过大", "Request is too large"),
++    ("请求必须是对象", "Request must be an object"),
++    ("本次输出被生图服务的安全系统拦截，未生成图片。", "The image service blocked this output; no image was generated."),
++    ("当前账号的生图额度不足，未生成图片。", "The account has insufficient image-generation quota; no image was generated."),
++    ("生图服务请求过多，请稍后再试。", "Too many image-generation requests; try again later."),
++    ("Codex 登录已失效，请重新登录后再试。", "Codex sign-in expired; sign in again."),
++    (
++        "连接生图服务超时或中断，未返回图片，请检查网络或稍后重试。",
++        "The image-service connection timed out or was interrupted; check your network or try again later.",
++    ),
++    ("生图服务未返回图片。请稍后重试，详情已保存到任务日志。", "The image service returned no image. Try again later; details are in the job logs."),
++    (
++        "未找到本机 Codex CLI。请安装 Node.js 后运行 npm.cmd install -g @openai/codex，再重新启动。",
++        "Codex CLI was not found. Install Node.js, run npm.cmd install -g @openai/codex, and restart.",
++    ),
++    ("Codex 代理配置无效，请检查 runtime/codex-proxy.json。", "Invalid Codex proxy configuration; check runtime/codex-proxy.json."),
++    ("正在处理生图请求", "Processing image request"),
++    ("连接中断，正在重连", "Connection interrupted; reconnecting"),
++    ("正在切换备用连接", "Switching to the fallback connection"),
++    ("正在生成图像", "Generating image"),
++    ("图像已返回，正在导入…", "Image received; importing…"),
++    ("{} · 已等待 {} 秒", "{} · waiting {} s"),
++    ("生成超过 3 分钟，已停止等待。请检查网络或稍后重试。", "Generation exceeded three minutes; check your network or try again later."),
++    ("编辑坐标映射无效。", "Invalid edit coordinate mapping."),
++    ("选区为空。", "The selection is empty."),
++    ("未知模式", "Unknown mode"),
++    ("请输入画面描述。", "Enter an image description."),
++    ("边缘羽化应为 0–64 像素。", "Feather radius must be between 0 and 64 pixels."),
++    ("请先在配套 PhotoCraft 窗口打开图片。", "Open an image in the PhotoCraft editor first."),
++    ("请先使用框选或套索选择要修改的区域。", "Select an area with a marquee or lasso first."),
++    (
++        "原文档已改变或关闭。结果已保存，未导入；请撤销改动后重试，或手动导入。",
++        "The original document changed or closed. The result was saved but not imported; undo the changes or import it manually.",
++    ),
++    ("参考图片参数必须为列表。", "Reference images must be a list."),
++    ("参考图参数无效。", "Invalid reference-image parameters."),
++    ("参考图名称无效。", "Invalid reference-image name."),
++    ("参考图超过本地传输保护阈值 64 MiB。", "Reference image exceeds the local 64 MiB transfer guard."),
++    ("参考图超过本地传输保护阈值 256 MiB。", "Reference images exceed the local 256 MiB transfer guard."),
++    ("参考图编码无效。", "Invalid reference-image encoding."),
++    ("参考图大小超出限制。", "Reference image exceeds the local size guard."),
++    ("参考图超过本地解码保护阈值 1 亿像素。", "Reference image exceeds the local 100-million-pixel decode guard."),
++];
++
++#[cfg(test)]
++mod tests {
++    #[test]
++    fn translations_preserve_dynamic_fields() {
++        for code in ["zh-hans", "zh-hant"] {
++            let lang = crate::i18n::Lang::from_code(code).unwrap();
++            for template in super::TEMPLATES {
++                assert_eq!(template.matches("{}").count(), crate::i18n::tr(lang, template).matches("{}").count(), "{code}: {template}");
++            }
++        }
++    }
++    #[test]
++    fn language_switch_updates_existing_dynamic_messages() {
++        let zh = crate::i18n::Lang::from_code("zh-hans").unwrap();
++        crate::i18n::with_language(zh, || {
++            assert_eq!(super::text("Fill selection"), "局部修改");
++            assert_eq!(super::text("Reference images selected: 5"), "已选择 5 张参考图");
++            assert_eq!(super::text("Processing image request · waiting 48 s"), "正在处理生图请求 · 已等待 48 秒");
++        });
++        crate::i18n::with_language(crate::i18n::Lang::EN, || {
++            assert_eq!(super::text("已选择 5 张参考图"), "Reference images selected: 5");
++            assert_eq!(super::text("Long image cutter"), "Long image cutter");
++        });
++    }
++}
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
 index c18a418c..9ca77a18 100644
 --- a/crates/ui-egui/src/state.rs
@@ -1631,12 +3156,41 @@ index c18a418c..9ca77a18 100644
              group_tools: Vec::new(),
              spring: None,
 diff --git a/docs/control-protocol.md b/docs/control-protocol.md
-index 7c5f4f2c..e4e648cd 100644
+index 7c5f4f2c..bdca088b 100644
 --- a/docs/control-protocol.md
 +++ b/docs/control-protocol.md
-@@ -777,3 +777,5 @@ retain custom collapse settings and Timeline visibility.
+@@ -46,6 +46,8 @@ The transport is `apps/photocraft/src/control_server.rs`, and the handlers are i
+ 
+ - `engine.execute {command, params}`: run any engine or UI command by id. Engine commands run directly with their default params and never open a dialog. Use `ui.menu.invoke` for menu-click behaviour, which opens a command's dialog when no params are given. `params` must be a JSON object (omit it or pass `null` for none); an array, string, number or boolean is an error naming the command, in every transport (control channel, `serve`, MCP and the CLI)
+ - `engine.commands`: list commands with enablement; the `result` is a JSON array of command objects (see [Command list replies](#command-list-replies))
++- `ui.inspect.clipboardExport` (Codex AI integration) is `null` when the title-bar copy button is hidden, otherwise `{rect:[x,y,width,height],enabled:bool}`. Click its screen-coordinate center with `ui.click` to copy the complete visible canvas; the button sits before the appearance control and is disabled without a document or system image clipboard service.
++- `file.export.clipboard` (Codex AI integration): desktop `ui.menu.invoke` or `engine.execute` copies the entire visible canvas to the system image clipboard as RGBA8 and returns `{width,height,copied:true}`. It ignores the selection, preserves transparency and canvas dimensions, creates no export file, and does not change document revisions or undo history. A busy/unavailable clipboard is an error and retains the previous internal copy. This explicit export works even when automatic Copy mirroring is disabled. Limit: 64 million pixels. In a headless engine session the command prepares the session clipboard only and returns `{width,height}`.
+ - `ui.inspect`: full UI state (tool, panels, views, dialogs, windows, window size). The menu tree is not included; use `ui.menu.list`. `brushPicker` is `null` while closed and `{pos: [x, y], size: [w, h]?, list: {collapsed, filter, renaming, showName, showStroke, showTip, scale}}` while the Brush Preset picker is open (coordinates in screen points; `size` is the picker's content size once its corner grip was dragged, `null` before that, and the drag remembers both dimensions; the three `show*` flags pick the parts of each preset's card — at least one is always on; `scale` is the footer slider, 0.15–2 with 1 the standard, multiplying the cards' width and height — the heights stop at half size and the name and tip-size text hold their 1.0 size — and dropping the tips' size numbers at 0.40 and below; the parts and the scale are remembered across restarts, while the search, collapsed groups and a rename in progress are not). `view` holds the View/Window/Type preferences: `screen_mode`, `extras`, `show` and `snap_to` flags, `flip_horizontal`, `arrange` (Window › Arrange layout), pixel aspect, font preview size, language options. `perf.timings.gpuInfo` holds the graphics adapter, backend, driver, the backend chosen at launch and why, the canvas renderer (`gpu`/`cpu`) and, after a device loss, `lost` (`help.systemInfo` returns the same as `info`). `perf.renderPath` says why the active document is drawn on the CPU: `current` is `null` on the GPU, else `{doc, kind, detail}` (`kind` is one of `overBudget`, `canvasTooLarge`, `compositorBuild`, `deviceLost`, `gpuError`, `unsupported`, `adjustPreview`, `viewTransform`, `softwareAdapter`, `cpuMode`; `detail` is the English reason, with the working set and budget for `overBudget`), and `history` holds the last 32 changes, oldest first (`{t, doc, kind, detail}`, `kind` `null` for back on the GPU, `doc` the changed document's id, or 0 for a change to every document). An adjustment dialog's CPU proxy preview has its own slot: `current` reports it (`adjustPreview`) only when neither the window nor the canvas has a reason, it isn't recorded while the whole window is off the GPU, and its history entries always have `kind` `adjustPreview`, with `detail` `null` when the preview stops using the proxy (never read as back on the GPU). `perf.timings.gpuFallback` is `current`'s `detail` as text. `perf.slowFrames` lists the last 64 frames over 50 ms, oldest first, each with its stages in ms: `t` (start), `frameMs`, `inputMs` (raw input to the UI build, commands excluded), `commandMs` and `command` (the last command run since the previous frame), `damageMs` (damage tracking and GPU memory budgeting), `compositeMs`, `uploadMs`, `gpuMs` (the GPU's own composite time, or `null`), `presentMs` (the previous frame's tessellation and submission, or `null`), `refresh` and `refreshPx` (the canvas redraw's kind and pixels) and `path` (`gpu` or `cpu`). It stays empty on the web, which has no clock
+ - `ui.set {tool?, panels?, dockTabs?, dock?, dockWidth?, colorPanel?, maskTarget?, vectorMaskTarget?, filterMaskTarget?, selectionMode?, zoom?, center?, rotation?, fit?, theme?, brushSize?, brushSection?, brushTab?, brushesView?, brushPicker?, brushPickerName?, brushPickerStroke?, brushPickerTip?, brushPickerScale?, gradientBlendMode?, gradientClassic?, shapeStroke?}`: change UI state; any other field is an error, checked before anything changes (`zoom` is the canvas zoom where 1 = 100%, one document pixel per physical display pixel, so a scaled display doesn't magnify the image; `theme` is `pro`, `proMedium`, `studio`, `studioLight` or `classic`; `selectionMode` is the selection tools' options-bar mode, 0 New, 1 Add, 2 Subtract, 3 Intersect; `brushSection` indexes the Brush Settings sections, `brushTab` 0 = Brush Settings, 1 = Brushes; `brushesView` is `list` or `grid` for the Brushes panel; `brushPickerName`, `brushPickerStroke` and `brushPickerTip` are the Brush Preset picker's card parts (booleans, at least one on), and `brushPickerScale` its footer card-scale slider (0.15 to 2, 1 the standard); `brushPicker` is `[x, y]` in screen points to open the Brush Preset picker there (as a right-click with a painting tool does) or `null` to close it, and picking a preset in it is `tools.setBrush {"preset": name}`; `dock` is `{order: ["layers", …], heights: {"properties": 180}, collapsed: ["color"], tabOrder: {"layers": ["Paths", "Layers", "Channels"]}}`, the right-dock groups top to bottom, their heights in points, the groups collapsed to their tab strip and each group's tab order left to right by panel name (a group left out keeps its default order, unknown names are ignored and tabs not listed follow in their default order; `dockTabs` keeps indexing tabs in their default order); `dockWidth` sets the right dock width in points, clamped to 250..520; `colorPanel` is `{background?, mode?, ramp?, webSafeRamp?}`, merged into the Color panel's state: `background` is whether it edits the background colour, `mode` its panel-menu display (`hueCube`, `brightnessCube`, `colorWheel`, `grayscaleSlider`, `rgbSliders`, `hsbSliders`, `cmykSliders`, `labSliders` or `webColorSliders`), `ramp` the colour ramp under the sliders (`rgbSpectrum`, `cmykSpectrum`, `grayscaleRamp` or `currentColors`) and `webSafeRamp` Make Ramp Web Safe; `maskTarget` targets the active layer's mask, which, like Photoshop, swaps in the foreground/background pair kept for masks (white/black until one is picked) and swaps the pixels' pair back when the pixels are targeted again; `filterMaskTarget` targets the active smart object's filter mask (an error without smart filters), so painting, fills, filters and adjustments edit it (`"target":"filterMask"`) while Move and Edit › Transform still act on the smart object)
+   - `typeTransform` is `null` outside a temporary Ctrl/Cmd Type-tool drag. During a drag it reports its source document/revision, original affine, oriented `frame` (layer, local bounds, document-space corners and pivot), and captured `gesture`. Drive it with `ui.pointer` and `command: true` at `down`; `move`/`up` may release the modifier. The document/history remain unchanged during preview, and `up` applies one `type.edit` within `textEdit`'s session. Pressing Escape during the drag cancels only the preview. This pointer state is never restored from saved UI state.
+@@ -777,3 +779,7 @@ retain custom collapse settings and Timeline visibility.
  ### Select the layer under the pointer
  
  Assign **Select Layer Under Cursor** in Keyboard Shortcuts to choose the topmost visible, pickable layer beneath the canvas pointer. Empty pixels and points outside the document leave the selection unchanged; dialogs, strokes and brush-resize gestures block it. The command follows zoom, pan, view rotation and horizontal flipping. Agents can invoke `ui.menu.invoke {"id":"layer.selectUnderCursor"}` after moving the screen pointer with `ui.move {"x": ..., "y": ...}`. The command has no default shortcut.
 +
 +Codex reference attachments: `ui.codexAI.references` accepts either `{references:[{name,data}]}` (base64 image bytes) or `{paths:[...]}`. Path reads always use the configured `automation_read` policy. Inspect `ui.inspect.codexAI.references` and `referenceLoading`; raw image payloads are not exposed. Existing control message size limits remain unchanged. Interactive composer drops use the same bounded image loader and do not open documents.
++
++Long-image cutter: invoke `tools.longCut.open` with `{}` through the UI command/menu path. `ui.inspect.longCut` reports `open`, canvas `width`/`height`, original-pixel `cuts`, `pieces`, `busy`, and the source widget `sourceRect` in screen points. File exports use interactive Save dialogs; the tool does not accept arbitrary output paths through this command.
+diff --git a/docs/parity-checklist.md b/docs/parity-checklist.md
+index 5c747e5d..ffbc03b5 100644
+--- a/docs/parity-checklist.md
++++ b/docs/parity-checklist.md
+@@ -2,11 +2,11 @@
+ 
+ Generated by `cargo xtask parity` from `crates/ui-egui/src/menu_catalog.rs` (Photoshop's menu tree) and the live command registry. Do not edit by hand.
+ 
+-**631 of 631 menu items live (100.0%).**
++**632 of 632 menu items live (100.0%).**
+ 
+ | Menu | Live | Total | % |
+ |---|---:|---:|---:|
+-| File | 52 | 52 | 100% |
++| File | 53 | 53 | 100% |
+ | Edit | 75 | 75 | 100% |
+ | Image | 61 | 61 | 100% |
+ | Layer | 163 | 163 | 100% |

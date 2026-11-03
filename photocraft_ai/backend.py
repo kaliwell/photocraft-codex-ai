@@ -169,7 +169,8 @@ class CodexBackend:
     def generate(self, job: Path, prompt: str, mode: str, cancel: threading.Event, progress,
                  source: Path | None = None, guide: Path | None = None, size='1024x1024', reference_images=()) -> Path:
         result = job / 'generated.png'
-        text_only = bool(source and mode != 'remove' and is_blank_selection(source, job / 'selection.png'))
+        selection_path=job/'selection-guide.png' if (job/'selection-guide.png').is_file() else job/'selection.png'
+        text_only = bool(source and mode != 'remove' and is_blank_selection(source, selection_path))
         if text_only:
             with Image.open(source) as image:
                 size = f'{image.width}x{image.height}'
@@ -195,7 +196,7 @@ class CodexBackend:
                 'Preserve image framing, aspect ratio, object positions and everything outside that area. '
                 'Return the complete edited image at the same dimensions.\n'
             )
-            with Image.open(job / 'selection.png') as selection:
+            with Image.open(selection_path) as selection:
                 bounds = selection.convert('L').getbbox()
                 width, height = selection.size
             if bounds:

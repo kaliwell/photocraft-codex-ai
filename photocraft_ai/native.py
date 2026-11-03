@@ -14,6 +14,7 @@ from .__main__ import ROOT, RUNTIME, connect, panel_lock
 from .backend import Cancelled
 from .service import Service
 from .references import validate_references
+from .localization import english
 
 API_PORT = 17879
 EDITOR_PORT = 17880
@@ -28,7 +29,9 @@ class NativeWorker:
 
     def snapshot(self):
         with self.lock:
-            return dict(self.state)
+            result = dict(self.state)
+            result['message'] = english(result['message'])
+            return result
 
     def update(self, **fields):
         with self.lock:
@@ -64,9 +67,7 @@ class NativeWorker:
                     raise RuntimeError('选区或文档已经改变，请重新点击生成。')
                 mode = request['mode']
                 prompt = request.get('prompt', '').strip()
-                if mode == 'generate':
-                    prompt = '在标记选区内根据以下描述生成新的画面内容：' + prompt
-                prepared = service.prepare('remove' if mode == 'remove' else 'fill', prompt,
+                prepared = service.prepare(mode, prompt,
                                            feather_px=0 if mode == 'generate' else 12,
                                            references=request.get('references', []))
             self.update(job=str(prepared.job))

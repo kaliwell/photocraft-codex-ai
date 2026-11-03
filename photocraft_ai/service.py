@@ -28,15 +28,40 @@ class Prepared:
     references: tuple[Path, ...] = ()
 
 
-def fit_dimensions(generated: Image.Image, size: tuple[int, int]) -> Image.Image:
+def fit_dimensions(generated: Image.Image, size: tuple[int, int], *, adapt=False) -> Image.Image:
     rgba = generated.convert('RGBA')
     if rgba.size != size:
         # Equal aspect ratio: map model pixels to document pixels uniformly.
         ratio_error = abs((rgba.width / rgba.height) / (size[0] / size[1]) - 1)
-        if ratio_error > .005:
+        if ratio_error > .005 and not adapt:
             raise RuntimeError(f'返回图片尺寸 {rgba.size} 与目标 {size} 宽高比不同，已保留结果，未拉伸或导入。')
         rgba = rgba.resize(size, Image.Resampling.LANCZOS)
     return rgba
+
+
+def edit_reference(full: Image.Image, mask: Image.Image):
+    """Letterbox the complete canvas into a bounded square, retaining its coordinate map."""
+    fitted = ImageOps.contain(full.convert('RGBA'), (1024, 1024), Image.Resampling.LANCZOS)
+    x, y = (1024-fitted.width)//2, (1024-fitted.height)//2
+    square = Image.new('RGBA', (1024,1024))
+    square.paste(fitted,(x,y))
+    selection = Image.new('L',(1024,1024))
+    selection.paste(mask.resize(fitted.size,Image.Resampling.LANCZOS),(x,y))
+    return square, selection, (x,y,x+fitted.width,y+fitted.height)
+
+
+def edited_layer(image: Image.Image, mask: Image.Image, job: Path) -> Image.Image:
+    transform = job/'edit-transform.json'
+    if transform.is_file():
+        mapping=json.loads(transform.read_text(encoding='utf-8'))
+        box=tuple(mapping['content_box'])
+        if len(box)!=4 or not (0<=box[0]<box[2]<=1024 and 0<=box[1]<box[3]<=1024):
+            raise RuntimeError('编辑坐标映射无效。')
+        aligned=fit_dimensions(image,(1024,1024),adapt=True).crop(box).resize(mask.size,Image.Resampling.LANCZOS)
+    else:
+        # Retained jobs from older versions used the full canvas directly.
+        aligned=fit_dimensions(image,mask.size,adapt=True)
+    return clipped_layer(aligned,mask)
 
 
 def inward_feather(mask: Image.Image, radius: int) -> Image.Image:
@@ -77,6 +102,19 @@ def clipped_layer(generated: Image.Image, mask: Image.Image, feather_px: int = 0
     return rgba
 
 
+def generated_layer(generated: Image.Image, mask: Image.Image) -> Image.Image:
+    """Place new artwork proportionally inside the selection, without cropping or stretching."""
+    bounds = mask.getbbox()
+    if bounds is None:
+        raise RuntimeError('选区为空。')
+    left, top, right, bottom = bounds
+    fitted = ImageOps.contain(generated.convert('RGBA'), (right-left, bottom-top), Image.Resampling.LANCZOS)
+    layer = Image.new('RGBA', mask.size)
+    layer.paste(fitted, (left+(right-left-fitted.width)//2, top+(bottom-top-fitted.height)//2))
+    layer.putalpha(ImageChops.multiply(layer.getchannel('A'), mask))
+    return layer
+
+
 class Service:
     def __init__(self, bridge: PhotoCraftBridge, root: Path, backend=None):
         self.bridge, self.root = bridge, root
@@ -84,7 +122,7 @@ class Service:
         self.lock = threading.Lock()
 
     def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None) -> Prepared:
-        if mode not in ('create', 'fill', 'remove'):
+        if mode not in ('create', 'fill', 'remove', 'generate'):
             raise ValueError('未知模式')
         if mode != 'remove' and not prompt.strip():
             raise ValueError('请输入画面描述。')
@@ -113,19 +151,31 @@ class Service:
             overlay.putalpha(mask.point(lambda p: round(p * .55)))
             Image.alpha_composite(full, overlay).save(guide)
             revision = self.bridge._revision(target)
+            if mode == 'generate':
+                source, guide = None, None
+            elif mode in ('fill', 'remove'):
+                square, selection, box = edit_reference(full,mask)
+                square.save(source)
+                selection.save(job/'selection-guide.png')
+                overlay=Image.new('RGBA',square.size,(255,0,180,0))
+                overlay.putalpha(selection.point(lambda p:round(p*.55)))
+                Image.alpha_composite(square,overlay).save(guide)
+                (job/'edit-transform.json').write_text(json.dumps({'content_box':box,'canvas_size':dims}),encoding='utf-8')
         if mode == 'remove':
-            prompt = '移除标记区域中的物体，根据周围环境自然补全，保持光照、纹理和透视一致。'
+            prompt = 'Remove the marked object and fill the area naturally, preserving surrounding light, texture and perspective.'
         meta = {'mode': mode, 'prompt': prompt, 'size': dims,
                 'document': target.name if target else None, 'revision': revision,
-                'feather_px': feather_px if mode != 'create' else 0}
-        meta['references'] = reference_names
+                'feather_px': feather_px if mode != 'create' else 0,
+                'generation_size': '1024x1024' if mode in ('generate','fill','remove') else dims,
+                'references':reference_names}
         (job / 'job.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
-        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px, reference_paths)
+        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
-                                     prepared.source, prepared.guide, 'x'.join(map(str, prepared.size)),
-                                     **({'reference_images': prepared.references} if prepared.references else {}))
+                                     prepared.source, prepared.guide,
+                                     '1024x1024' if prepared.mode in ('generate','fill','remove') else 'x'.join(map(str, prepared.size)),
+                                     **({'reference_images':prepared.references} if prepared.references else {}))
 
     def apply(self, prepared: Prepared, path: Path):
         b = self.bridge
@@ -146,7 +196,7 @@ class Service:
                 # feather. Hard support guarantees the selection's exterior stays untouched.
                 support = prepared.mask.point([0] + [255] * 255)
                 prepared.mask.save(prepared.job / 'blend-mask.png')
-                layer = clipped_layer(image, prepared.mask)
+                layer = generated_layer(image, prepared.mask) if prepared.mode == 'generate' else edited_layer(image, prepared.mask,prepared.job)
             output = prepared.job / 'layer.png'
             layer.save(output)
             b.insert_results(prepared.target, [output.read_bytes()], Rect(0, 0, *prepared.size),

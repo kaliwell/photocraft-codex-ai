@@ -8,6 +8,8 @@
 
 ## 中文说明
 
+**当前合并开发版**：同一个 PhotoCraft 0.20.1 已包含 Codex AI（含多图参考）、Userfull Tools 的长图切割和复制画布，并统一语言切换、尺寸适配、羽化与耗时显示。使用一个 `start.cmd` 即可；本机旧 Userfull 启动入口也已转到同一软件。本次不生成安装包，下方已发布 v0.4.0 ZIP 尚未包含这次全部合并。
+
 v0.4.0 已同步 PhotoCraft 0.20.1，并将多图参考集成到原 Codex AI 插件中。源码和安装包均使用 0.20.1，继续通过 `start.cmd` 启动。
 
 原 Codex AI 插件现支持多图参考：选区工具栏点击“参考图＋”多选图片，或将图片拖到工具栏；缩略图可单张移除。提示词按“参考图1、参考图2”引用，附件会随生成请求发送。继续使用原来的 `start.cmd`，无需运行 Userfull Tools。详见[参考图说明](docs/reference-images.md)。
@@ -99,6 +101,8 @@ python tests/smoke_photocraft.py
 | 0.2.4–0.2.1 | 独立代理、HTTPS 错误分类与超时、局部编辑羽化、单次生成和延迟优化 |
 
 ## English
+
+**Current unified development build:** one PhotoCraft 0.20.1 hosts Codex AI with multi-image references, Userfull Tools' long-image cutter and canvas clipboard export, shared language handling, size adaptation, feathering and timing. Launch with `start.cmd`; local legacy Userfull launchers now point to the same editor. No new package is produced for this merge; the published v0.4.0 ZIP predates the complete merge.
 
 v0.4.0 integrates PhotoCraft 0.20.1 and multi-image references into the original Codex AI plugin. Both source and portable builds use 0.20.1; continue launching with `start.cmd`.
 
