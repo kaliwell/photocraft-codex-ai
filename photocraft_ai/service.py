@@ -10,6 +10,7 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 from .backend import CodexBackend, Cancelled
 from .bridge import PhotoCraftBridge, Rect
+from .references import save_references
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Prepared:
     source: Path | None
     guide: Path | None
     feather_px: int = 12
+    references: tuple[Path, ...] = ()
 
 
 def fit_dimensions(generated: Image.Image, size: tuple[int, int]) -> Image.Image:
@@ -81,7 +83,7 @@ class Service:
         self.backend = backend or CodexBackend()
         self.lock = threading.Lock()
 
-    def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12) -> Prepared:
+    def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None) -> Prepared:
         if mode not in ('create', 'fill', 'remove'):
             raise ValueError('未知模式')
         if mode != 'remove' and not prompt.strip():
@@ -90,6 +92,7 @@ class Service:
             raise ValueError('边缘羽化应为 0–64 像素。')
         job = self.root / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         job.mkdir(parents=True)
+        reference_paths,reference_names=save_references([] if references is None else references,job)
         target, revision, mask, source, guide = None, None, None, None, None
         dims = tuple(map(int, size.split('x')))
         if mode != 'create':
@@ -115,12 +118,14 @@ class Service:
         meta = {'mode': mode, 'prompt': prompt, 'size': dims,
                 'document': target.name if target else None, 'revision': revision,
                 'feather_px': feather_px if mode != 'create' else 0}
+        meta['references'] = reference_names
         (job / 'job.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
-        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px)
+        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px, reference_paths)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
-                                     prepared.source, prepared.guide, 'x'.join(map(str, prepared.size)))
+                                     prepared.source, prepared.guide, 'x'.join(map(str, prepared.size)),
+                                     **({'reference_images': prepared.references} if prepared.references else {}))
 
     def apply(self, prepared: Prepared, path: Path):
         b = self.bridge

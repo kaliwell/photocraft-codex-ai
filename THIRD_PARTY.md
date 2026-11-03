@@ -24,7 +24,11 @@ Pillow source: https://github.com/python-pillow/Pillow/tree/11.3.0
 
 ## Native editor integration (0.2)
 
-The optional `native/photocraft.exe` is a locally rebuilt PhotoCraft 0.19.0, based on
-https://github.com/storytold/photocraft at `2df9f807702a935184041355a86405380bda8274`.
+The optional `native/photocraft.exe` is a locally rebuilt PhotoCraft 0.20.1, based on
+https://github.com/storytold/photocraft at `327c4cc82e737a3e0af7c147a477126d77525495`.
 PhotoCraft is MIT OR Apache-2.0; its LICENSE-MIT, LICENSE-APACHE, NOTICE and ATTRIBUTION.md
 are preserved alongside the binary. The local source patch is in `native-source/`.
+
+Reference-image attachments are adapted from the user's PhotoCraft Userfull Tools
+repository, https://github.com/kaliwell/photocraft-userfull-tools,
+commit `c05124bca29def76e35b2293245161c34da75eba`, and integrated into the 0.20.1 editor.

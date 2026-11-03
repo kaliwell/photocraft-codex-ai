@@ -13,6 +13,7 @@ import time
 from .__main__ import ROOT, RUNTIME, connect, panel_lock
 from .backend import Cancelled
 from .service import Service
+from .references import validate_references
 
 API_PORT = 17879
 EDITOR_PORT = 17880
@@ -40,6 +41,7 @@ class NativeWorker:
             raise ValueError('请求参数无效。')
         if mode != 'remove' and not prompt.strip():
             raise ValueError('请先输入画面描述。')
+        validate_references(request.get('references',[]))
         with self.lock:
             if self.state['busy']:
                 raise ValueError('已有生成任务正在运行。')
@@ -65,7 +67,8 @@ class NativeWorker:
                 if mode == 'generate':
                     prompt = '在标记选区内根据以下描述生成新的画面内容：' + prompt
                 prepared = service.prepare('remove' if mode == 'remove' else 'fill', prompt,
-                                           feather_px=0 if mode == 'generate' else 12)
+                                           feather_px=0 if mode == 'generate' else 12,
+                                           references=request.get('references', []))
             self.update(job=str(prepared.job))
             result = service.generate(prepared, self.cancel, lambda text: self.update(message=text))
             if self.cancel.is_set():
@@ -119,7 +122,7 @@ def handler(worker: NativeWorker, token: str):
                 return
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if length < 0 or length > 32768:
+                if length < 0 or length > 350*1024*1024:
                     raise ValueError('请求过大')
                 request = json.loads(self.rfile.read(length) or b'{}')
                 if not isinstance(request, dict):
@@ -139,7 +142,9 @@ def handler(worker: NativeWorker, token: str):
 
 def main():
     parser = argparse.ArgumentParser(description='PhotoCraft Codex AI 原生选区工具栏')
-    upgraded = ROOT / 'native-0.19/photocraft.exe'
+    upgraded = ROOT / 'native-0.20/photocraft.exe'
+    if not upgraded.is_file():
+        upgraded = ROOT / 'native-0.19/photocraft.exe'
     build_info = upgraded.parent / 'BUILD_INFO.json'
     if build_info.is_file():
         executable = json.loads(build_info.read_text(encoding='utf-8')).get('executable', 'photocraft.exe')

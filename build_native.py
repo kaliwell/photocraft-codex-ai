@@ -7,13 +7,13 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parent
-source = ROOT / 'research/photocraft-0.19'
+source = ROOT / 'research/photocraft-0.20'
 target = ROOT / 'research/photocraft/target'
 if not (source / 'Cargo.toml').is_file():
     raise SystemExit('请先按 native-source/README.md 准备 PhotoCraft 源码。')
 subprocess.run(['cargo', 'build', '--locked', '-p', 'photocraft', '-j', '4',
                 '--config', str(ROOT / 'native-build.toml'), '--target-dir', str(target)], cwd=source, check=True)
-output = ROOT / 'native-0.19'
+output = ROOT / 'native-0.20'
 output.mkdir(exist_ok=True)
 binary = output / 'photocraft.exe'
 try:

@@ -1,5 +1,5 @@
 diff --git a/crates/compose/src/advanced_tests.rs b/crates/compose/src/advanced_tests.rs
-index 608c618..4334768 100644
+index 15d3cf23..4e8ac354 100644
 --- a/crates/compose/src/advanced_tests.rs
 +++ b/crates/compose/src/advanced_tests.rs
 @@ -168,7 +168,7 @@ fn knockout_follows_masks_and_transparency_shapes() {
@@ -21,7 +21,7 @@ index 608c618..4334768 100644
          // Default: the stroke follows the masked shape, so it runs along the mask's edge.
          check(&d, 7, 4, RED, "stroke along the mask edge");
 diff --git a/crates/compose/src/cmyk/tests.rs b/crates/compose/src/cmyk/tests.rs
-index 44b265c..8fcae10 100644
+index 44b265c8..8fcae104 100644
 --- a/crates/compose/src/cmyk/tests.rs
 +++ b/crates/compose/src/cmyk/tests.rs
 @@ -38,7 +38,7 @@ fn mask(rects: &[(Rect, f32)], default: f32, density: f32, enabled: bool) -> Lay
@@ -34,7 +34,7 @@ index 44b265c..8fcae10 100644
  
  /// An 8-bit sample as stored.
 diff --git a/crates/compose/src/fx_cache.rs b/crates/compose/src/fx_cache.rs
-index 43e524d..707496d 100644
+index 43e524d3..707496dd 100644
 --- a/crates/compose/src/fx_cache.rs
 +++ b/crates/compose/src/fx_cache.rs
 @@ -61,7 +61,7 @@ pub(crate) fn layer_identity(layer: &Layer, h: &mut std::collections::hash_map::
@@ -47,7 +47,7 @@ index 43e524d..707496d 100644
      if let Some(vm) = &layer.vector_mask {
          format!("{vm:?}").hash(h);
 diff --git a/crates/compose/src/masks.rs b/crates/compose/src/masks.rs
-index 851c9bc..6c8a9a7 100644
+index 851c9bc5..6c8a9a70 100644
 --- a/crates/compose/src/masks.rs
 +++ b/crates/compose/src/masks.rs
 @@ -162,7 +162,7 @@ fn key(layer: &Layer, canvas: Rect) -> u64 {
@@ -146,7 +146,7 @@ index 851c9bc..6c8a9a7 100644
  #[cfg(test)]
  mod tests;
 diff --git a/crates/compose/src/masks/tests.rs b/crates/compose/src/masks/tests.rs
-index 9076770..d114b77 100644
+index 90767709..d114b77c 100644
 --- a/crates/compose/src/masks/tests.rs
 +++ b/crates/compose/src/masks/tests.rs
 @@ -2,6 +2,33 @@ use super::*;
@@ -184,7 +184,7 @@ index 9076770..d114b77 100644
      match lookup(c, k) {
          CachedMask::Pending(slot, _) => slot,
 diff --git a/crates/compose/src/tests.rs b/crates/compose/src/tests.rs
-index 917192f..3da906a 100644
+index 7ea86550..ffa77205 100644
 --- a/crates/compose/src/tests.rs
 +++ b/crates/compose/src/tests.rs
 @@ -2076,7 +2076,7 @@ fn shapeless_fx_doc(depth: SampleType) -> Document {
@@ -215,7 +215,7 @@ index 917192f..3da906a 100644
          let whole = render(&d, bounds);
          let mut changed = 0;
 diff --git a/crates/doc/src/lib.rs b/crates/doc/src/lib.rs
-index ab13697..65ef382 100644
+index ab13697e..65ef3825 100644
 --- a/crates/doc/src/lib.rs
 +++ b/crates/doc/src/lib.rs
 @@ -243,6 +243,8 @@ mod label_color_tests {
@@ -237,7 +237,7 @@ index ab13697..65ef382 100644
      pub fn hide_all() -> Self {
          Self { surface: Surface::with_default(PixelFormat::GRAY8, &[0.0]), ..Self::reveal_all() }
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds.rs b/crates/engine/src/cmd/layer_mask_props_cmds.rs
-index 64a088e..7afac12 100644
+index 64a088ea..7afac125 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds.rs
 @@ -1,6 +1,9 @@
@@ -352,7 +352,7 @@ index 64a088e..7afac12 100644
          run: edit,
          journal: true,
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
-index cd32de1..043ea02 100644
+index cd32de15..043ea024 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
 @@ -7,6 +7,58 @@ use photocraft_raster::Surface;
@@ -433,7 +433,7 @@ index cd32de1..043ea02 100644
              doc.layers.push(layer);
              let mut s = Session::new();
 diff --git a/crates/engine/src/cmd/smart_cmds/filters.rs b/crates/engine/src/cmd/smart_cmds/filters.rs
-index 3009ecf..1569a07 100644
+index 3009ecfb..1569a074 100644
 --- a/crates/engine/src/cmd/smart_cmds/filters.rs
 +++ b/crates/engine/src/cmd/smart_cmds/filters.rs
 @@ -54,7 +54,7 @@ fn smart_mut_of(l: &mut Layer) -> Result<&mut SmartObject> {
@@ -446,7 +446,7 @@ index 3009ecf..1569a07 100644
  
  /// Appends a smart filter (from a `filter.*` command) and re-renders. A selection becomes the
 diff --git a/crates/engine/src/cmd/smart_svg_cmds/tests.rs b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
-index 18963ce..07d17d3 100644
+index 18963ce3..07d17d32 100644
 --- a/crates/engine/src/cmd/smart_svg_cmds/tests.rs
 +++ b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
 @@ -102,6 +102,7 @@ fn shared_instances_keep_placement_filters_masks_and_one_undo_transaction() {
@@ -458,7 +458,7 @@ index 18963ce..07d17d3 100644
              enabled: true,
              linked: true,
 diff --git a/crates/engine/src/cmd/smartselect_cmds/tests.rs b/crates/engine/src/cmd/smartselect_cmds/tests.rs
-index 5fecac7..fb10084 100644
+index 5fecac79..fb10084f 100644
 --- a/crates/engine/src/cmd/smartselect_cmds/tests.rs
 +++ b/crates/engine/src/cmd/smartselect_cmds/tests.rs
 @@ -353,6 +353,7 @@ fn refine_edge_outputs_and_undo() {
@@ -470,10 +470,10 @@ index 5fecac7..fb10084 100644
              density: 0.75,
              feather: 3.5,
 diff --git a/crates/format/src/convert.rs b/crates/format/src/convert.rs
-index e408297..83b88ae 100644
+index fbe121c1..840fbf92 100644
 --- a/crates/format/src/convert.rs
 +++ b/crates/format/src/convert.rs
-@@ -176,6 +176,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
+@@ -183,6 +183,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
              psd_raw: opt_blob(&s.psd_raw, sink),
              filters_enabled: s.filters_enabled,
              filter_mask: s.filter_mask.as_ref().map(|m| MaskM {
@@ -481,7 +481,7 @@ index e408297..83b88ae 100644
                  surface: surface_m(&m.surface, sink),
                  enabled: m.enabled,
                  linked: m.linked,
-@@ -197,6 +198,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
+@@ -204,6 +205,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
          fill_opacity: l.fill_opacity,
          clipped: l.clipped,
          mask: l.mask.as_ref().map(|m| MaskM {
@@ -489,7 +489,7 @@ index e408297..83b88ae 100644
              surface: surface_m(&m.surface, sink),
              enabled: m.enabled,
              linked: m.linked,
-@@ -524,6 +526,7 @@ impl Loader<'_> {
+@@ -531,6 +533,7 @@ impl Loader<'_> {
                  filters_enabled: *filters_enabled,
                  filter_mask: match filter_mask {
                      Some(mm) => Some(LayerMask {
@@ -497,7 +497,7 @@ index e408297..83b88ae 100644
                          surface: self.surface(&mm.surface)?,
                          enabled: mm.enabled,
                          linked: mm.linked,
-@@ -538,9 +541,14 @@ impl Loader<'_> {
+@@ -545,9 +548,14 @@ impl Loader<'_> {
              }),
          };
          let mask = match &m.mask {
@@ -516,10 +516,10 @@ index e408297..83b88ae 100644
          };
          let fill_cache = match &m.fill_cache {
 diff --git a/crates/format/src/manifest.rs b/crates/format/src/manifest.rs
-index 768a3f4..ea09387 100644
+index dd3a012a..116a53d4 100644
 --- a/crates/format/src/manifest.rs
 +++ b/crates/format/src/manifest.rs
-@@ -185,6 +185,8 @@ pub struct VideoDataM {
+@@ -165,6 +165,8 @@ pub struct VideoDataM {
  
  #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
  pub struct MaskM {
@@ -529,7 +529,7 @@ index 768a3f4..ea09387 100644
      pub enabled: bool,
      pub linked: bool,
 diff --git a/crates/format/tests/it/common/mod.rs b/crates/format/tests/it/common/mod.rs
-index ce0381f..13ed4fa 100644
+index ce0381ff..13ed4fa8 100644
 --- a/crates/format/tests/it/common/mod.rs
 +++ b/crates/format/tests/it/common/mod.rs
 @@ -188,6 +188,7 @@ pub fn rich_doc(mode: ColorMode, depth: SampleType) -> Document {
@@ -541,7 +541,7 @@ index ce0381f..13ed4fa 100644
                  enabled: true,
                  linked: false,
 diff --git a/crates/format/tests/it/roundtrip.rs b/crates/format/tests/it/roundtrip.rs
-index 32ef503..a891759 100644
+index be016f0a..84033f0d 100644
 --- a/crates/format/tests/it/roundtrip.rs
 +++ b/crates/format/tests/it/roundtrip.rs
 @@ -11,6 +11,18 @@ use photocraft_raster::Rgba8Image;
@@ -564,7 +564,7 @@ index 32ef503..a891759 100644
  fn gradient_overlay_interpolation_roundtrips_in_native_documents() {
      use photocraft_doc::effects::GradientInterpolation;
 diff --git a/crates/io/src/affinity.rs b/crates/io/src/affinity.rs
-index 4e5ed90..0d82a32 100644
+index 4e5ed90f..0d82a328 100644
 --- a/crates/io/src/affinity.rs
 +++ b/crates/io/src/affinity.rs
 @@ -327,7 +327,7 @@ impl Builder {
@@ -577,10 +577,10 @@ index 4e5ed90..0d82a32 100644
          Some(l)
      }
 diff --git a/crates/io/src/flat.rs b/crates/io/src/flat.rs
-index 8e169bd..cd1e5f2 100644
+index 9863bdf9..881803ff 100644
 --- a/crates/io/src/flat.rs
 +++ b/crates/io/src/flat.rs
-@@ -1582,6 +1582,7 @@ mod streamed_png_tests {
+@@ -1589,6 +1589,7 @@ mod streamed_png_tests {
          let mut doc = Document::new("masked", Size::new(80, 300), ColorMode::Rgb, SampleType::U8);
          let mut bottom = layer(&doc, &[(doc.bounds(), &[0.2, 0.4, 0.6, 1.0])]);
          bottom.mask = Some(photocraft_doc::LayerMask {
@@ -589,10 +589,10 @@ index 8e169bd..cd1e5f2 100644
              enabled: true,
              linked: true,
 diff --git a/crates/io/src/psd_import.rs b/crates/io/src/psd_import.rs
-index 6989941..6465627 100644
+index a70577fb..a98e4853 100644
 --- a/crates/io/src/psd_import.rs
 +++ b/crates/io/src/psd_import.rs
-@@ -387,6 +387,7 @@ impl Ctx<'_> {
+@@ -393,6 +393,7 @@ impl Ctx<'_> {
          }
          let params = m.parameters;
          Some(LayerMask {
@@ -601,10 +601,10 @@ index 6989941..6465627 100644
              enabled: flags & 2 == 0,
              linked: flags & 1 == 0,
 diff --git a/crates/io/src/smart_map.rs b/crates/io/src/smart_map.rs
-index 72adbe1..2790fc7 100644
+index cacce2b7..d46ccb0c 100644
 --- a/crates/io/src/smart_map.rs
 +++ b/crates/io/src/smart_map.rs
-@@ -177,7 +177,7 @@ pub fn mask_from_item(item: &FilterEffectsItem, sample: SampleType, stack: &Filt
+@@ -178,7 +178,7 @@ pub fn mask_from_item(item: &FilterEffectsItem, sample: SampleType, stack: &Filt
      if surface.content_bounds().is_empty() {
          return Ok(None);
      }
@@ -614,7 +614,7 @@ index 72adbe1..2790fc7 100644
  
  /// The unfiltered placed pixels of an `FEid` item (the inverse of [`feid_item`]), in `fmt`: colour
 diff --git a/crates/io/src/xcf.rs b/crates/io/src/xcf.rs
-index e9a6b92..4bd45a7 100644
+index e9a6b92a..4bd45a7e 100644
 --- a/crates/io/src/xcf.rs
 +++ b/crates/io/src/xcf.rs
 @@ -1079,7 +1079,7 @@ impl<'a> Image<'a> {
@@ -627,7 +627,7 @@ index e9a6b92..4bd45a7 100644
          let linear = composite_space.unsigned_abs() == 1 || blend_space.unsigned_abs() == 1;
          Ok(Some((Node { layer, path, group, children: Vec::new() }, linear)))
 diff --git a/crates/io/tests/it/adjust_blend_roundtrip.rs b/crates/io/tests/it/adjust_blend_roundtrip.rs
-index bab904f..4343842 100644
+index bab904f5..43438423 100644
 --- a/crates/io/tests/it/adjust_blend_roundtrip.rs
 +++ b/crates/io/tests/it/adjust_blend_roundtrip.rs
 @@ -151,7 +151,14 @@ fn adjustment_doc(adj: &Adjustment, depth: SampleType) -> Document {
@@ -664,7 +664,7 @@ index bab904f..4343842 100644
      let mut clipped = raster("clipped", fmt, Rect::new(0, 0, 12, 16), 3, true);
      clipped.clipped = true;
 diff --git a/crates/io/tests/it/cmyk_composite_export.rs b/crates/io/tests/it/cmyk_composite_export.rs
-index 0fea336..0590923 100644
+index 77f35a62..ba13519d 100644
 --- a/crates/io/tests/it/cmyk_composite_export.rs
 +++ b/crates/io/tests/it/cmyk_composite_export.rs
 @@ -30,6 +30,7 @@ fn mixed_region_document(depth: SampleType, opaque: bool) -> Document {
@@ -676,7 +676,7 @@ index 0fea336..0590923 100644
          enabled: true,
          linked: true,
 diff --git a/crates/io/tests/it/common/mod.rs b/crates/io/tests/it/common/mod.rs
-index 7bb010f..304a1ab 100644
+index 7bb010f1..304a1ab4 100644
 --- a/crates/io/tests/it/common/mod.rs
 +++ b/crates/io/tests/it/common/mod.rs
 @@ -107,13 +107,26 @@ pub fn gen_doc(mode: ColorMode, depth: SampleType, f: Features) -> Document {
@@ -710,7 +710,7 @@ index 7bb010f..304a1ab 100644
      }
  
 diff --git a/crates/io/tests/it/psd_empty_channels.rs b/crates/io/tests/it/psd_empty_channels.rs
-index 610bb14..270a079 100644
+index 610bb145..270a0794 100644
 --- a/crates/io/tests/it/psd_empty_channels.rs
 +++ b/crates/io/tests/it/psd_empty_channels.rs
 @@ -12,6 +12,7 @@ fn empty_layer_and_mask_channels_use_raw_without_a_payload() {
@@ -721,8 +721,23 @@ index 610bb14..270a079 100644
                      surface: photocraft_raster::Surface::new(photocraft_color::PixelFormat::new(ColorMode::Grayscale, depth, false)),
                      enabled: true,
                      linked: true,
+diff --git a/crates/ui-egui/src/app/frame.rs b/crates/ui-egui/src/app/frame.rs
+index 07ea17b7..30a2b356 100644
+--- a/crates/ui-egui/src/app/frame.rs
++++ b/crates/ui-egui/src/app/frame.rs
+@@ -113,7 +113,9 @@ impl PhotocraftApp {
+         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+         if !dropped.is_empty() {
+             let at = self.services.cursor_pos.as_mut().and_then(|f| f(ctx));
+-            self.open_dropped(ctx, dropped, at);
++            if !crate::codex_ai::accept_drop(ctx, &dropped, at) {
++                self.open_dropped(ctx, dropped, at);
++            }
+             // Files dragged in from another app's window: PhotoCraft comes to the front and takes
+             // the keyboard, as Photoshop does, instead of staying behind the source (#5687).
+             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
-index 12b4a8a..55fd380 100644
+index 12b4a8a7..55fd3806 100644
 --- a/crates/ui-egui/src/canvas.rs
 +++ b/crates/ui-egui/src/canvas.rs
 @@ -2074,6 +2074,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
@@ -737,10 +752,10 @@ index 12b4a8a..55fd380 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 0000000..5ede355
+index 00000000..a5d92c67
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,649 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use egui::{Context, Rect, Vec2, pos2, vec2};
@@ -748,6 +763,16 @@ index 0000000..5ede355
 +use std::sync::{Arc, Mutex};
 +
 +use crate::{PhotocraftApp, canvas::ViewXform, theme::Tokens, widgets};
++
++const MAX_REFERENCE_BYTES: usize = 64 * 1024 * 1024;
++const MAX_REFERENCE_TOTAL: usize = 256 * 1024 * 1024;
++#[derive(Clone)]
++struct Reference {
++    name: String,
++    data: Arc<String>,
++    bytes: usize,
++    texture: egui::TextureHandle,
++}
 +
 +#[derive(Clone, Default)]
 +struct Status {
@@ -757,6 +782,8 @@ index 0000000..5ede355
 +    rect: Option<Rect>,
 +    input: Option<Rect>,
 +    buttons: Vec<(String, Rect)>,
++    references: Vec<Reference>,
++    loading: bool,
 +}
 +
 +type Shared = Arc<Mutex<Status>>;
@@ -775,6 +802,7 @@ index 0000000..5ede355
 +    let state = shared(ctx);
 +    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +    json!({"busy": state.busy, "message": state.message, "error": state.error,
++           "referenceLoading":state.loading,"references":state.references.iter().map(|r|json!({"name":r.name,"bytes":r.bytes})).collect::<Vec<_>>(),
 +           "maskFeatherMenu": crate::layer_menu_ui::inspect_feather_menu(ctx),
 +           "rect": state.rect.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "input": state.input.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
@@ -828,7 +856,7 @@ index 0000000..5ede355
 +    }
 +    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
 +    let width = (xf.rect.width() - 24.0).clamp(280.0, 560.0);
-+    let size = vec2(width, 104.0);
++    let size = vec2(width, 124.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
 +    let anchor = position(selection, xf.rect, size);
 +    let tokens = Tokens::get(ctx);
 +    let mut input_rect = None;
@@ -840,11 +868,40 @@ index 0000000..5ede355
 +            |ui| {
 +                ui.set_width(width - 20.0);
 +                let input = ui.add_enabled(
-+                    !snapshot.busy,
++                    !snapshot.busy && !snapshot.loading,
 +                    egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt).hint_text("描述要修改或生成的内容…").char_limit(4000).desired_width(f32::INFINITY),
 +                );
 +                input_rect = Some(input.rect);
++                ui.label("拖入图片作为参考 · 支持多张，数量由 Codex 校验");
 +                button_rects = actions(app, ui, &snapshot);
++                if !snapshot.references.is_empty() {
++                    let mut remove = None;
++                    egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
++                        ui.horizontal(|ui| {
++                            for (index, reference) in snapshot.references.iter().enumerate() {
++                                ui.vertical(|ui| {
++                                    ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
++                                    let response = ui
++                                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(format!("{} ×", index + 1)))
++                                        .on_hover_text("移除此参考图");
++                                    button_rects.push((format!("移除参考图{}", index + 1), response.rect));
++                                    if response.clicked() {
++                                        remove = Some(index);
++                                    }
++                                });
++                            }
++                        });
++                    });
++                    if let Some(index) = remove {
++                        let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                        state.references.remove(index);
++                        state.message = format!("已选择 {} 张参考图", state.references.len());
++                        state.error = false;
++                    }
++                }
++                if snapshot.loading {
++                    ui.label("正在读取参考图…");
++                }
 +                if snapshot.busy {
 +                    ui.horizontal(|ui| {
 +                        ui.spinner();
@@ -863,16 +920,29 @@ index 0000000..5ede355
 +    state.buttons = button_rects;
 +}
 +
-+fn actions(app: &PhotocraftApp, ui: &mut egui::Ui, status: &Status) -> Vec<(String, Rect)> {
++fn actions(app: &mut PhotocraftApp, ui: &mut egui::Ui, status: &Status) -> Vec<(String, Rect)> {
 +    let mut buttons = Vec::new();
 +    ui.horizontal(|ui| {
-+        ui.add_enabled_ui(!status.busy, |ui| {
++        ui.add_enabled_ui(!status.busy && !status.loading, |ui| {
 +            let has_prompt = !app.ui.codex_ai_prompt.trim().is_empty();
 +            for (label, mode, enabled) in [("局部修改", "fill", has_prompt), ("移除物体", "remove", true), ("生成图片", "generate", has_prompt)] {
 +                let response = ui.add_enabled_ui(enabled, |ui| widgets::secondary_button(ui, label, 76.0)).inner;
 +                buttons.push((label.into(), response.rect));
 +                if response.clicked() {
 +                    submit(app, ui.ctx(), mode);
++                }
++            }
++            let add = ui
++                .add_enabled(!app.file_dialog_open(), egui::Button::new(format!("参考图 {} ＋", status.references.len())))
++                .on_hover_text("一次选择多张图片；在提示词中用参考图1、参考图2指定用途");
++            buttons.push(("添加参考图".into(), add.rect));
++            if add.clicked() {
++                let ctx = ui.ctx().clone();
++                if let Err(error) = pick_references(app, &ctx) {
++                    let state = shared(&ctx);
++                    let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                    state.message = error;
++                    state.error = true;
 +                }
 +            }
 +        });
@@ -885,9 +955,232 @@ index 0000000..5ede355
 +
 +fn submit(app: &PhotocraftApp, ctx: &Context, mode: &str) {
 +    let Some(doc) = app.session.active() else { return };
-+    let request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,
++    let state = shared(ctx);
++    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++    if state.loading {
++        return;
++    }
++    let references: Vec<_> = state.references.iter().map(|r| json!({"name":r.name,"data":r.data.as_str()})).collect();
++    drop(state);
++    let request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,"references":references,
 +        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision}});
 +    start(ctx, request);
++}
++
++fn pick_references(app: &mut PhotocraftApp, ctx: &Context) -> Result<Value, String> {
++    let ctx = ctx.clone();
++    let initial_dir = crate::file_dialog::last_used_dir(&app.ui.recent_files)
++        .or_else(|| std::env::var_os("USERPROFILE").map(|p| std::path::PathBuf::from(p).join("Desktop").to_string_lossy().into_owned()));
++    app.ask_file(
++        crate::FileDialogRequest::Open {
++            multiple: true,
++            initial_dir,
++            extensions: Some(["png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff"].iter().map(|s| s.to_string()).collect()),
++        },
++        move |_, answer| queue_references(ctx, answer),
++    )
++}
++
++fn queue_references(ctx: Context, answer: crate::FileDialogAnswer) -> Result<Value, String> {
++    queue_reference_input(ctx, move || Ok(answer))
++}
++
++/// Authenticated automation can attach image bytes it already holds, never arbitrary local paths.
++pub(crate) fn attach_request(app: &mut PhotocraftApp, ctx: &Context, params: &Value) -> Result<Value, String> {
++    let object = params.as_object().ok_or("Expected an object")?;
++    if object.len() != 1 {
++        return Err("Expected only references".into());
++    }
++    if let Some(paths) = object.get("paths") {
++        let paths = paths.as_array().ok_or("Expected paths array")?;
++        let read = app.services.automation_read.as_mut().ok_or("Automation file reads are unavailable")?;
++        let mut files = Vec::new();
++        let mut total = 0;
++        for path in paths {
++            let path = path.as_str().ok_or("Expected image path")?;
++            let (name, bytes) = read(path)?;
++            total += bytes.len();
++            if bytes.len() > MAX_REFERENCE_BYTES || total > MAX_REFERENCE_TOTAL {
++                return Err("Local transfer memory guard exceeded".into());
++            }
++            files.push((name, bytes));
++        }
++        return queue_references(ctx.clone(), crate::FileDialogAnswer::ContentsMany(files));
++    }
++    let references = object.get("references").and_then(Value::as_array).ok_or("Expected references array")?;
++    let mut total = 0;
++    for reference in references {
++        let object = reference.as_object().ok_or("Invalid reference")?;
++        let name = object.get("name").and_then(Value::as_str).ok_or("Missing name")?;
++        let data = object.get("data").and_then(Value::as_str).ok_or("Missing image data")?;
++        if object.len() != 2 || name.is_empty() || name.chars().count() > 255 || data.len() > 4 * MAX_REFERENCE_BYTES.div_ceil(3) {
++            return Err("Invalid reference payload".into());
++        }
++        total += data.len();
++        if total > 350 * 1024 * 1024 {
++            return Err("Local transfer memory guard exceeded".into());
++        }
++    }
++    let references = references.clone();
++    queue_reference_input(ctx.clone(), move || {
++        use base64::Engine;
++        let files = references
++            .into_iter()
++            .map(|r| {
++                let name = r["name"].as_str().ok_or("Missing name")?.to_string();
++                let data = base64::engine::general_purpose::STANDARD.decode(r["data"].as_str().ok_or("Missing data")?).map_err(|e| e.to_string())?;
++                Ok((name, data))
++            })
++            .collect::<Result<Vec<_>, String>>()?;
++        Ok(crate::FileDialogAnswer::ContentsMany(files))
++    })
++}
++
++fn queue_reference_input(ctx: Context, input: impl FnOnce() -> Result<crate::FileDialogAnswer, String> + Send + 'static) -> Result<Value, String> {
++    let state = shared(&ctx);
++    {
++        let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        if state.busy || state.loading {
++            return Err("请等待当前任务完成".into());
++        }
++        state.loading = true;
++    }
++    let work = move || {
++        let (count, total) = {
++            let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++            (state.references.len(), state.references.iter().map(|r| r.bytes).sum())
++        };
++        let result = input().and_then(|answer| read_references(answer, &ctx, count, total));
++        {
++            let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++            state.loading = false;
++            match result {
++                Ok(files) => {
++                    state.references.extend(files);
++                    state.error = false;
++                    state.message = format!("已选择 {} 张参考图", state.references.len());
++                }
++                Err(e) => {
++                    state.error = true;
++                    state.message = e;
++                }
++            }
++        }
++        ctx.request_repaint();
++    };
++    #[cfg(not(target_arch = "wasm32"))]
++    std::thread::spawn(work);
++    #[cfg(target_arch = "wasm32")]
++    work();
++    Ok(json!({"references":"loading"}))
++}
++
++/// Only files dropped on the visible AI composer become references; all other drops retain File/Open behavior.
++#[cfg(not(target_arch = "wasm32"))]
++pub(crate) fn accept_drop(ctx: &Context, files: &[egui::DroppedFileHandle], at: Option<egui::Pos2>) -> bool {
++    if files.is_empty() {
++        return false;
++    }
++    let state = shared(ctx);
++    let on_composer = {
++        let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        state.rect.zip(at.or_else(|| ctx.pointer_hover_pos())).is_some_and(|(r, p)| r.contains(p))
++    };
++    if !on_composer {
++        return false;
++    }
++    ctx.input_mut(|i| i.raw.dropped_files.clear());
++    let files = files.to_vec();
++    if let Err(error) = queue_reference_input(ctx.clone(), move || read_dragged(files)) {
++        let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        state.message = error;
++        state.error = true;
++    }
++    true
++}
++
++#[cfg(target_arch = "wasm32")]
++pub(crate) fn accept_drop(_ctx: &Context, _files: &[egui::DroppedFileHandle], _at: Option<egui::Pos2>) -> bool {
++    false
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn read_dragged(files: Vec<egui::DroppedFileHandle>) -> Result<crate::FileDialogAnswer, String> {
++    use std::io::Read;
++    let mut result = Vec::new();
++    let mut total = 0;
++    for file in files {
++        let path = file.path();
++        let bytes = if path.is_file() {
++            let mut bytes = Vec::new();
++            std::fs::File::open(path).map_err(|e| e.to_string())?.take(MAX_REFERENCE_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
++            bytes
++        } else {
++            file.bytes()?
++        };
++        total += bytes.len();
++        if bytes.len() > MAX_REFERENCE_BYTES || total > MAX_REFERENCE_TOTAL {
++            return Err("超过本地传输内存保护阈值，请分批提交".into());
++        }
++        result.push((path.to_string_lossy().into_owned(), bytes));
++    }
++    Ok(crate::FileDialogAnswer::ContentsMany(result))
++}
++
++fn read_references(answer: crate::FileDialogAnswer, ctx: &Context, _count: usize, mut total: usize) -> Result<Vec<Reference>, String> {
++    use crate::FileDialogAnswer;
++    use base64::Engine;
++    use std::io::Read;
++    let files = match answer {
++        FileDialogAnswer::Paths(paths) => {
++            let mut files = Vec::new();
++            let mut collected = total;
++            for path in paths {
++                let mut bytes = Vec::new();
++                std::fs::File::open(&path)
++                    .map_err(|e| e.to_string())?
++                    .take(MAX_REFERENCE_BYTES as u64 + 1)
++                    .read_to_end(&mut bytes)
++                    .map_err(|e| e.to_string())?;
++                collected += bytes.len();
++                if bytes.len() > MAX_REFERENCE_BYTES || collected > MAX_REFERENCE_TOTAL {
++                    return Err("Local transfer memory guard exceeded".into());
++                }
++                files.push((path, bytes));
++            }
++            files
++        }
++        FileDialogAnswer::Contents(name, bytes) => vec![(name, bytes)],
++        FileDialogAnswer::ContentsMany(files) => files,
++        _ => return Err("图片选择结果无效".into()),
++    };
++    let mut references = Vec::new();
++    for (name, bytes) in files {
++        total += bytes.len();
++        if bytes.is_empty() || bytes.len() > MAX_REFERENCE_BYTES || total > MAX_REFERENCE_TOTAL {
++            return Err("超过本地传输内存保护阈值，请分批提交".into());
++        }
++        let options = photocraft_codecs::DecodeOptions {
++            limits: photocraft_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: 100_000_000, max_alloc: 1024 * 1024 * 1024 },
++            ..Default::default()
++        };
++        let image = photocraft_codecs::decode_with(&bytes, &options).map_err(|e| format!("参考图无法读取：{e}"))?;
++        let rgba = image.to_rgba8();
++        let scale = (80.0 / image.width() as f64).min(80.0 / image.height() as f64).min(1.0);
++        let w = (image.width() as f64 * scale).round().max(1.0) as usize;
++        let h = (image.height() as f64 * scale).round().max(1.0) as usize;
++        let mut preview = vec![0; w * h * 4];
++        for y in 0..h {
++            for x in 0..w {
++                let source = ((y * image.height() as usize / h) * image.width() as usize + x * image.width() as usize / w) * 4;
++                preview[(y * w + x) * 4..(y * w + x + 1) * 4].copy_from_slice(&rgba[source..source + 4]);
++            }
++        }
++        let name = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().chars().take(255).collect::<String>()).unwrap_or_else(|| "image".into());
++        let texture = ctx.load_texture("codex-reference", egui::ColorImage::from_rgba_unmultiplied([w, h], &preview), egui::TextureOptions::LINEAR);
++        references.push(Reference { name, data: Arc::new(base64::engine::general_purpose::STANDARD.encode(&bytes)), bytes: bytes.len(), texture });
++    }
++    Ok(references)
 +}
 +
 +#[cfg(target_arch = "wasm32")]
@@ -1004,6 +1297,66 @@ index 0000000..5ede355
 +mod tests {
 +    use super::{Context, PhotocraftApp, Rect, ViewXform, json, pos2, position, selection_rect, vec2};
 +    #[test]
++    fn multiple_reference_selection_keeps_order_and_payload() {
++        use base64::Engine;
++        let image = photocraft_codecs::Image::from_u8(8, 6, photocraft_codecs::ChannelLayout::Rgba, vec![128; 8 * 6 * 4]).unwrap();
++        let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).unwrap();
++        let selected = crate::FileDialogAnswer::ContentsMany(vec![("first.png".into(), png.clone()), ("second.png".into(), png.clone())]);
++        let files = super::read_references(selected, &Context::default(), 0, 0).unwrap();
++        assert_eq!(files.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["first.png", "second.png"]);
++        assert_eq!(base64::engine::general_purpose::STANDARD.decode(files[0].data.as_str()).unwrap(), png);
++        assert!(files[0].texture.size()[0] <= 80);
++        let many = crate::FileDialogAnswer::ContentsMany((0..7).map(|i| (format!("{i}.png"), png.clone())).collect());
++        assert_eq!(super::read_references(many, &Context::default(), 0, 0).unwrap().len(), 7);
++    }
++    #[test]
++    fn reference_picker_rejects_invalid_images() {
++        let selected = crate::FileDialogAnswer::ContentsMany((0..6).map(|i| (format!("{i}.png"), vec![1])).collect());
++        assert!(super::read_references(selected, &Context::default(), 0, 0).is_err());
++        let selected = crate::FileDialogAnswer::Contents("bad.png".into(), vec![1, 2, 3]);
++        assert!(super::read_references(selected, &Context::default(), 0, 0).is_err());
++    }
++    #[test]
++    fn reference_automation_paths_use_the_scoped_reader_and_reject_unknown_fields() {
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        let ctx = Context::default();
++        assert!(super::attach_request(&mut app, &ctx, &json!({"paths":["outside.png"]})).is_err());
++        app.services.automation_read = Some(Box::new(|_| Err("outside configured read roots".into())));
++        assert_eq!(super::attach_request(&mut app, &ctx, &json!({"paths":["outside.png"]})).unwrap_err(), "outside configured read roots");
++        assert!(super::attach_request(&mut app, &ctx, &json!({"paths":[],"extra":true})).is_err());
++        assert!(!super::shared(&ctx).lock().unwrap().loading);
++    }
++    #[test]
++    fn dropped_images_only_enter_the_composer_and_keep_virtual_file_order() {
++        #[derive(Debug)]
++        struct Drop(std::path::PathBuf, Vec<u8>);
++        impl egui::DroppedFile for Drop {
++            fn path(&self) -> &std::path::Path {
++                &self.0
++            }
++            fn bytes(&self) -> Result<Vec<u8>, String> {
++                Ok(self.1.clone())
++            }
++        }
++        let image = photocraft_codecs::Image::from_u8(8, 6, photocraft_codecs::ChannelLayout::Rgba, vec![128; 8 * 6 * 4]).unwrap();
++        let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).unwrap();
++        let files: Vec<egui::DroppedFileHandle> =
++            (0..2).map(|i| std::sync::Arc::new(Drop(format!("virtual-{i}.png").into(), png.clone())) as egui::DroppedFileHandle).collect();
++        let ctx = Context::default();
++        let shared = super::shared(&ctx);
++        shared.lock().unwrap().rect = Some(Rect::from_min_size(pos2(10.0, 10.0), vec2(100.0, 100.0)));
++        assert!(!super::accept_drop(&ctx, &files, Some(pos2(200.0, 200.0))));
++        assert!(super::accept_drop(&ctx, &files, Some(pos2(40.0, 40.0))));
++        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++        while shared.lock().unwrap().loading && std::time::Instant::now() < deadline {
++            std::thread::sleep(std::time::Duration::from_millis(10));
++        }
++        let state = shared.lock().unwrap();
++        assert!(!state.loading);
++        assert!(!state.error, "{}", state.message);
++        assert_eq!(state.references.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["virtual-0.png", "virtual-1.png"]);
++    }
++    #[test]
 +    fn prompt_defaults_preserve_upstream_move_tool() {
 +        let ui = crate::state::UiState::default();
 +        assert_eq!(ui.tool, crate::state::Tool::Move);
@@ -1052,8 +1405,32 @@ index 0000000..5ede355
 +        assert!(selection_rect(&app, &ctx, xf).is_none());
 +    }
 +}
+diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
+index e979d3d8..526784f8 100644
+--- a/crates/ui-egui/src/control.rs
++++ b/crates/ui-egui/src/control.rs
+@@ -209,6 +209,7 @@ pub(super) const METHODS: &[&str] = &[
+     "ui.screenshot",
+     "ui.set",
+     "ui.type",
++    "ui.codexAI.references",
+     "ui.window.close",
+     "ui.window.open",
+ ];
+diff --git a/crates/ui-egui/src/control/dispatch.rs b/crates/ui-egui/src/control/dispatch.rs
+index 3c7b22dd..581d7d68 100644
+--- a/crates/ui-egui/src/control/dispatch.rs
++++ b/crates/ui-egui/src/control/dispatch.rs
+@@ -1056,6 +1056,7 @@ fn dialog_confirm_or_apply(app: &mut PhotocraftApp, req: &ControlRequest, id: u6
+ fn input_methods(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRequest) -> Option<Outcome> {
+     let p = &req.params;
+     Some(match req.method.as_str() {
++        "ui.codexAI.references" => wrap(crate::codex_ai::attach_request(app, ctx, p)),
+         "ui.pointer" => pointer(app, ctx, p),
+         "ui.click" | "ui.move" => click(app, ctx, p, req.method == "ui.click"),
+         "ui.key" => key(app, ctx, p),
 diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
-index 4e09d79..d68fb90 100644
+index 4e09d79a..d68fb90a 100644
 --- a/crates/ui-egui/src/control/inspect.rs
 +++ b/crates/ui-egui/src/control/inspect.rs
 @@ -29,7 +29,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
@@ -1079,7 +1456,7 @@ index 4e09d79..d68fb90 100644
  
  pub fn save_screenshot(app: &mut PhotocraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
 diff --git a/crates/ui-egui/src/dialogs/adjust_preview.rs b/crates/ui-egui/src/dialogs/adjust_preview.rs
-index 5d060f2..7e72e74 100644
+index 5d060f2c..7e72e745 100644
 --- a/crates/ui-egui/src/dialogs/adjust_preview.rs
 +++ b/crates/ui-egui/src/dialogs/adjust_preview.rs
 @@ -101,7 +101,7 @@ pub fn base_document(doc: &Document, target: LayerId) -> Result<Document, String
@@ -1092,7 +1469,7 @@ index 5d060f2..7e72e74 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index e17b2bc..3509c6d 100644
+index 8165b8a4..c5b0a439 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -26,6 +26,7 @@ macro_rules! tl {
@@ -1104,7 +1481,7 @@ index e17b2bc..3509c6d 100644
  pub mod dialogs;
  pub mod dock;
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui.rs b/crates/ui-egui/src/panels/layer_menu_ui.rs
-index f274e28..d5ecd95 100644
+index f274e286..d5ecd95b 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui.rs
 +++ b/crates/ui-egui/src/panels/layer_menu_ui.rs
 @@ -147,6 +147,10 @@ pub fn show(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, on_set: bo
@@ -1203,7 +1580,7 @@ index f274e28..d5ecd95 100644
  /// first when it isn't the active layer.
  pub fn show_effects(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, actions: &mut Vec<(String, Value)>) {
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
-index a7ab70a..3acdcc9 100644
+index a7ab70a7..3acdcc91 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
 +++ b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
 @@ -1,5 +1,24 @@
@@ -1232,7 +1609,7 @@ index a7ab70a..3acdcc9 100644
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
-index c18a418..9ca77a1 100644
+index c18a418c..9ca77a18 100644
 --- a/crates/ui-egui/src/state.rs
 +++ b/crates/ui-egui/src/state.rs
 @@ -204,6 +204,9 @@ pub struct DocWindow {
@@ -1253,3 +1630,13 @@ index c18a418..9ca77a1 100644
              tool: Tool::Move,
              group_tools: Vec::new(),
              spring: None,
+diff --git a/docs/control-protocol.md b/docs/control-protocol.md
+index 7c5f4f2c..e4e648cd 100644
+--- a/docs/control-protocol.md
++++ b/docs/control-protocol.md
+@@ -777,3 +777,5 @@ retain custom collapse settings and Timeline visibility.
+ ### Select the layer under the pointer
+ 
+ Assign **Select Layer Under Cursor** in Keyboard Shortcuts to choose the topmost visible, pickable layer beneath the canvas pointer. Empty pixels and points outside the document leave the selection unchanged; dialogs, strokes and brush-resize gestures block it. The command follows zoom, pan, view rotation and horizontal flipping. Agents can invoke `ui.menu.invoke {"id":"layer.selectUnderCursor"}` after moving the screen pointer with `ui.move {"x": ..., "y": ...}`. The command has no default shortcut.
++
++Codex reference attachments: `ui.codexAI.references` accepts either `{references:[{name,data}]}` (base64 image bytes) or `{paths:[...]}`. Path reads always use the configured `automation_read` policy. Inspect `ui.inspect.codexAI.references` and `referenceLoading`; raw image payloads are not exposed. Existing control message size limits remain unchanged. Interactive composer drops use the same bounded image loader and do not open documents.

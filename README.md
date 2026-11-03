@@ -2,11 +2,15 @@
 
 **原生选区 AI 工具栏 / Native selection AI toolbar**
 
-[中文](#中文说明) · [English](#english) · [下载 / Download v0.3.1](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.3.1)
+[中文](#中文说明) · [English](#english) · [下载 / Download v0.4.0](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.4.0)
 
 ![PhotoCraft 原生 AI 工具栏 / Native AI toolbar](examples/native-toolbar-final.png)
 
 ## 中文说明
+
+v0.4.0 已同步 PhotoCraft 0.20.1，并将多图参考集成到原 Codex AI 插件中。源码和安装包均使用 0.20.1，继续通过 `start.cmd` 启动。
+
+原 Codex AI 插件现支持多图参考：选区工具栏点击“参考图＋”多选图片，或将图片拖到工具栏；缩略图可单张移除。提示词按“参考图1、参考图2”引用，附件会随生成请求发送。继续使用原来的 `start.cmd`，无需运行 Userfull Tools。详见[参考图说明](docs/reference-images.md)。
 
 v0.3.0 将配套编辑器升级到 PhotoCraft 0.19.0，保留 AI 工具栏、直接图片回传与可调蒙版羽化。
 
@@ -16,7 +20,7 @@ v0.3.1 修复羽化边缘硬截断，向选区内部渐隐到完全透明，并�
 
 ### 下载与启动
 
-1. 在 [v0.3.1 发布页](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.3.1) 下载 **`photocraft-codex-ai-0.3.1-windows-x64-local-node.zip`**。
+1. 在 [v0.4.0 发布页](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.4.0) 下载 **`photocraft-codex-ai-0.4.0-windows-x64-local-node.zip`**。
 2. 完整解压到可写目录。压缩包已包含配套 PhotoCraft、Python 3.13.5 和 Pillow 11.3.0；**不包含 Node.js 或 Codex CLI**。
 3. 使用电脑现有的 Node.js 和通过 npm 安装的 Codex CLI。尚未安装 Codex 时，执行 `npm.cmd install -g @openai/codex`。
 4. 双击 **`start.cmd`**。已有 Codex 登录可直接使用；尚未登录时按提示登录自己的账号。
@@ -96,6 +100,10 @@ python tests/smoke_photocraft.py
 
 ## English
 
+v0.4.0 integrates PhotoCraft 0.20.1 and multi-image references into the original Codex AI plugin. Both source and portable builds use 0.20.1; continue launching with `start.cmd`.
+
+Multi-image references are now integrated into the original Codex AI plugin. Choose several images using the reference button, or drop them onto the AI toolbar; thumbnails are individually removable. Refer to them as “reference 1”, “reference 2”, etc. Continue launching with `start.cmd`; the separate Userfull Tools editor is not required.
+
 v0.3.0 upgrades the matching editor to PhotoCraft 0.19.0 while retaining AI tools, direct image receipt, and editable mask feathering.
 
 v0.3.1 fixes sharp feather boundaries with an inward fade to full transparency, and displays total elapsed time after successful generation. Adjust an existing layer's feather slider to apply the new mode.
@@ -104,13 +112,13 @@ Use **Edit selection, Remove object, and Generate image** directly inside PhotoC
 
 ### Download and start
 
-1. Download **`photocraft-codex-ai-0.3.1-windows-x64-local-node.zip`** from the [v0.3.1 release](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.3.1).
+1. Download **`photocraft-codex-ai-0.4.0-windows-x64-local-node.zip`** from the [v0.4.0 release](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.4.0).
 2. Extract the entire archive into a writable folder. It includes the matching PhotoCraft editor, Python 3.13.5, and Pillow 11.3.0. **Node.js and Codex CLI are not bundled.**
 3. Use your existing Node.js and npm-installed Codex CLI. If Codex is missing, run `npm.cmd install -g @openai/codex`.
 4. Double-click **`start.cmd`**. Your existing Codex sign-in is reused; otherwise, follow the sign-in prompt for your own account.
 5. Open an image in the newly launched editor, make a rectangular or lasso selection, enter a description, and choose an operation from the selection toolbar.
 
-An internet connection and a Codex installation/account with working built-in image generation are required. GitHub's automatically generated **Source code** archives do not include the editor binary. The Windows x64 package is a preview development build: plugin 0.3.1 with a modified PhotoCraft 0.19.0 editor.
+An internet connection and a Codex installation/account with working built-in image generation are required. GitHub's automatically generated **Source code** archives do not include the editor binary. The Windows x64 package is a preview development build: plugin 0.4.0 with a modified PhotoCraft 0.20.1 editor.
 
 ### Usage
 
