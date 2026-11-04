@@ -1,3 +1,187 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 27fbbbc09..8a05921eb 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -4981,6 +4981,7 @@ dependencies = [
+  "blake3",
+  "chrono",
+  "clap",
++ "clipboard-win",
+  "core-graphics2",
+  "craft-update",
+  "dispatch2",
+diff --git a/apps/photocraft/Cargo.toml b/apps/photocraft/Cargo.toml
+index b064f0037..7570d76c3 100644
+--- a/apps/photocraft/Cargo.toml
++++ b/apps/photocraft/Cargo.toml
+@@ -106,6 +106,7 @@ winit = { version = "=0.30.13", default-features = false, features = ["wayland-c
+ # GetCursorPos) and the window frame for the custom title bar (`window_frame.rs`, window styles),
+ # no dependencies of its own. Pinned exactly: review the diff before bumping.
+ [target.'cfg(target_os = "windows")'.dependencies]
++clipboard-win = "=5.4.1"
+ # Safe Windows screen-capture bindings; Linux uses the pure-Rust X11 client/portal.
+ xcap = "=0.9.8"
+ winsafe = { version = "=0.0.29", default-features = false, features = ["user"] }
+diff --git a/apps/photocraft/src/main.rs b/apps/photocraft/src/main.rs
+index 75eb0ea83..4c166ca28 100644
+--- a/apps/photocraft/src/main.rs
++++ b/apps/photocraft/src/main.rs
+@@ -65,6 +65,8 @@ mod presentation;
+ mod print_portal;
+ mod screen_color;
+ mod services;
++#[cfg(target_os = "windows")]
++mod windows_clipboard;
+ // macOS gets one instance from LaunchServices (open-documents Apple events).
+ #[cfg(any(not(target_os = "macos"), test))]
+ mod single_instance;
+diff --git a/apps/photocraft/src/services.rs b/apps/photocraft/src/services.rs
+index cabd2196d..f964c71df 100644
+--- a/apps/photocraft/src/services.rs
++++ b/apps/photocraft/src/services.rs
+@@ -751,6 +751,10 @@ pub fn native(automation: Option<photocraft_automation::AuthorizedWorkspace>) ->
+                     |cb| match cb.get_image() {
+                         Ok(img) => Ok(Some((img.width as u32, img.height as u32, img.bytes.into_owned()))),
+                         Err(error) => {
++                            #[cfg(target_os = "windows")]
++                            if let Some(image) = crate::windows_clipboard::read() {
++                                return Ok(Some(image));
++                            }
+                             #[cfg(target_os = "linux")]
+                             if let Some(image) = wayland_clipboard_image() {
+                                 return Ok(Some(image));
+diff --git a/apps/photocraft/src/windows_clipboard.rs b/apps/photocraft/src/windows_clipboard.rs
+new file mode 100644
+index 000000000..6ed7f0e4b
+--- /dev/null
++++ b/apps/photocraft/src/windows_clipboard.rs
+@@ -0,0 +1,126 @@
++//! Bounded fallback for ordinary Windows DIBs rejected by the primary clipboard decoder.
++type Image = (u32, u32, Vec<u8>);
++
++pub fn read() -> Option<Image> {
++    for format in [17, 8] {
++        if !clipboard_win::is_format_avail(format) {
++            continue;
++        }
++        let data: Vec<u8> = clipboard_win::get_clipboard(clipboard_win::formats::RawData(format)).ok()?;
++        if let Some(image) = dib(&data) {
++            return Some(image);
++        }
++    }
++    None
++}
++
++fn dib(data: &[u8]) -> Option<Image> {
++    let word = |offset: usize| -> Option<u32> { Some(u32::from_le_bytes(data.get(offset..offset.checked_add(4)?)?.try_into().ok()?)) };
++    let short = |offset: usize| -> Option<u16> { Some(u16::from_le_bytes(data.get(offset..offset.checked_add(2)?)?.try_into().ok()?)) };
++    let header = word(0)? as usize;
++    if ![40, 52, 56, 108, 124].contains(&header) || data.len() < header {
++        return None;
++    }
++    let width = i32::try_from(word(4)?).ok()? as usize;
++    let signed_height = word(8)? as i32;
++    let height = signed_height.checked_abs()? as usize;
++    let depth = short(14)? as usize;
++    let compression = word(16)?;
++    if width == 0 || height == 0 || short(12)? != 1 || ![24, 32].contains(&depth) || ![0, 3].contains(&compression) {
++        return None;
++    }
++    let size = width.checked_mul(height)?.checked_mul(4)?;
++    if size > 256 * 1024 * 1024 {
++        return None;
++    }
++    let mut offset = header;
++    let mut alpha = false;
++    if compression == 3 {
++        if depth != 32 {
++            return None;
++        }
++        let masks = [word(40)?, word(44)?, word(48)?];
++        if masks != [0xff0000, 0xff00, 0xff] {
++            return None;
++        }
++        if header == 40 {
++            offset = offset.checked_add(12)?;
++        }
++        if header >= 56 {
++            let mask = word(52)?;
++            if mask != 0 && mask != 0xff000000 {
++                return None;
++            }
++            alpha = mask != 0;
++        }
++    }
++    let colors = word(32)? as usize;
++    if colors > 256 {
++        return None;
++    }
++    offset = offset.checked_add(colors.checked_mul(4)?)?;
++    let stride = width.checked_mul(depth)?.checked_add(31)?.checked_div(32)?.checked_mul(4)?;
++    let pixels = data.get(offset..offset.checked_add(stride.checked_mul(height)?)?)?;
++    let mut rgba = vec![0; size];
++    for y in 0..height {
++        let row = if signed_height > 0 { height - 1 - y } else { y };
++        for x in 0..width {
++            let src = row * stride + x * (depth / 8);
++            let dst = (y * width + x) * 4;
++            rgba[dst..dst + 4].copy_from_slice(&[pixels[src + 2], pixels[src + 1], pixels[src], if alpha { pixels[src + 3] } else { 255 }]);
++        }
++    }
++    Some((width as u32, height as u32, rgba))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn sample(header: usize, top_down: bool, depth: u16) -> Vec<u8> {
++        let mut bytes = vec![0; header + 8];
++        bytes[..4].copy_from_slice(&(header as u32).to_le_bytes());
++        bytes[4..8].copy_from_slice(&1_i32.to_le_bytes());
++        bytes[8..12].copy_from_slice(&(if top_down { -2_i32 } else { 2_i32 }).to_le_bytes());
++        bytes[12..14].copy_from_slice(&1_u16.to_le_bytes());
++        bytes[14..16].copy_from_slice(&depth.to_le_bytes());
++        if header == 124 {
++            bytes[16..20].copy_from_slice(&3_u32.to_le_bytes());
++            for (offset, mask) in [(40, 0xff0000_u32), (44, 0xff00), (48, 0xff)] {
++                bytes[offset..offset + 4].copy_from_slice(&mask.to_le_bytes());
++            }
++        }
++        bytes[header..].copy_from_slice(&[0, 0, 255, 0, 255, 0, 0, 0]);
++        bytes
++    }
++    #[test]
++    fn bitmap_v5_without_alpha_and_bottom_up_dib_are_opaque() {
++        for header in [40, 124] {
++            let image = dib(&sample(header, false, 32)).unwrap();
++            assert_eq!(image, (1, 2, vec![0, 0, 255, 255, 255, 0, 0, 255]));
++        }
++    }
++    #[test]
++    fn top_down_padding_and_explicit_alpha_are_preserved() {
++        assert_eq!(dib(&sample(40, true, 24)).unwrap().2, vec![255, 0, 0, 255, 0, 0, 255, 255]);
++        let mut bytes = sample(124, true, 32);
++        bytes[52..56].copy_from_slice(&0xff000000_u32.to_le_bytes());
++        bytes[127] = 128;
++        assert_eq!(dib(&bytes).unwrap().2, vec![255, 0, 0, 128, 0, 0, 255, 0]);
++    }
++    #[test]
++    fn truncated_compressed_and_unbounded_headers_are_rejected() {
++        let mut bytes = sample(124, false, 32);
++        assert!(dib(&bytes[..127]).is_none());
++        bytes[4..8].copy_from_slice(&i32::MAX.to_le_bytes());
++        assert!(dib(&bytes).is_none());
++        let mut bytes = sample(40, false, 24);
++        bytes[16..20].copy_from_slice(&1_u32.to_le_bytes());
++        assert!(dib(&bytes).is_none());
++        assert!(dib(&[]).is_none());
++    }
++    #[test]
++    #[ignore = "Read-only check of the current Windows clipboard"]
++    fn current_clipboard_is_readable() {
++        assert!(read().is_some());
++    }
++}
 diff --git a/crates/automation/src/workspace.rs b/crates/automation/src/workspace.rs
 index a60cc66a1..26d281969 100644
 --- a/crates/automation/src/workspace.rs
@@ -1092,10 +1276,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..bbe84503e
+index 000000000..f1033fd88
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,805 @@
+@@ -0,0 +1,825 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1128,6 +1312,7 @@ index 000000000..bbe84503e
 +    loading: bool,
 +    prompt_focused: bool,
 +    suppress_paste_release: bool,
++    paste_command_seen: bool,
 +}
 +
 +type Shared = Arc<Mutex<Status>>;
@@ -1317,6 +1502,7 @@ index 000000000..bbe84503e
 +                i.events.retain(|e| {
 +                    if matches!(e, egui::Event::Key { key: egui::Key::V, pressed: false, .. }) {
 +                        s.suppress_paste_release = false;
++                        s.paste_command_seen = false;
 +                        false
 +                    } else {
 +                        true
@@ -1335,11 +1521,24 @@ index 000000000..bbe84503e
 +    if !targeted || app.session.active().is_none_or(|d| d.doc.selection.is_none()) {
 +        return;
 +    }
++    let command_seen = {
++        let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        ctx.input(|i| {
++            if i.modifiers.command || i.events.iter().any(|e| matches!(e, egui::Event::ModifiersChanged(m) if m.command)) {
++                s.paste_command_seen = true;
++            }
++            if i.events.iter().any(|e| matches!(e, egui::Event::Key { key, pressed: true, modifiers, .. } if *key != egui::Key::V || !modifiers.command)) {
++                s.paste_command_seen = false;
++            }
++        });
++        s.paste_command_seen
++    };
 +    let (image, requested) = ctx.input(|i| {
 +        (
 +            i.events.iter().find_map(|e| if let egui::Event::PasteImage(image) = e { Some(image.clone()) } else { None }),
 +            i.events.iter().any(|e| {
-+                matches!(e, egui::Event::Paste(_)) || matches!(e, egui::Event::Key { key: egui::Key::V, pressed: true, modifiers, .. } if modifiers.command)
++                matches!(e, egui::Event::Paste(_))
++                    || matches!(e, egui::Event::Key { key: egui::Key::V, pressed, modifiers, .. } if modifiers.command || (!pressed && command_seen))
 +            }),
 +        )
 +    });
@@ -1356,7 +1555,9 @@ index 000000000..bbe84503e
 +        None
 +    };
 +    if let Some(result) = result {
-+        state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).suppress_paste_release = true;
++        state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).suppress_paste_release =
++            !ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::V, pressed: false, .. })));
++        state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).paste_command_seen = false;
 +        ctx.input_mut(|i| {
 +            i.events.retain(|e| !matches!(e, egui::Event::Paste(_) | egui::Event::PasteImage(_)) && !matches!(e, egui::Event::Key { key: egui::Key::V, .. }))
 +        });
@@ -1758,7 +1959,10 @@ index 000000000..bbe84503e
 +            s.rect = Some(Rect::EVERYTHING);
 +            s.prompt_focused = true;
 +        }
-+        ctx.input_mut(|i| i.events.push(egui::Event::Paste("".into())));
++        // Windows may swallow the failed image-paste press and forward only V release.
++        ctx.input_mut(|i| {
++            i.events.push(egui::Event::Key { key: egui::Key::V, physical_key: None, pressed: false, repeat: false, modifiers: egui::Modifiers::COMMAND })
++        });
 +        super::paste_events(&mut app, &ctx);
 +        assert!(ctx.input(|i| i.events.is_empty()));
 +        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -1973,7 +2177,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..fa0a40ea6 100644
+index ef2788221..dd72783d2 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2084,13 +2288,13 @@ index ef2788221..fa0a40ea6 100644
 +
 +# Userfull Tools language integration
 +
-+Paste reference image	粘贴参考图
-+Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
-+Clipboard image is invalid or too large	剪贴板图片无效或过大
-+Clipboard image reading is unavailable	当前无法读取剪贴板图片
-+No image in the clipboard	剪贴板中没有图片
++	Paste reference image	粘贴参考图
++	Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
++	Clipboard image is invalid or too large	剪贴板图片无效或过大
++	Clipboard image reading is unavailable	当前无法读取剪贴板图片
++	No image in the clipboard	剪贴板中没有图片
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..5aaaf0c9b 100644
+index c0bb1a3ab..dd688d381 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
 @@ -3158,3 +3158,109 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
@@ -2198,11 +2402,11 @@ index c0bb1a3ab..5aaaf0c9b 100644
 +
 +# Userfull Tools language integration
 +
-+Paste reference image	粘贴参考图
-+Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
-+Clipboard image is invalid or too large	剪贴板图片无效或过大
-+Clipboard image reading is unavailable	当前无法读取剪贴板图片
-+No image in the clipboard	剪贴板中没有图片
++	Paste reference image	粘贴参考图
++	Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
++	Clipboard image is invalid or too large	剪贴板图片无效或过大
++	Clipboard image reading is unavailable	当前无法读取剪贴板图片
++	No image in the clipboard	剪贴板中没有图片
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -3089,10 +3293,10 @@ index fd760ec71..cb606e064 100644
 +}
 diff --git a/crates/ui-egui/src/plugin_i18n.rs b/crates/ui-egui/src/plugin_i18n.rs
 new file mode 100644
-index 000000000..b400aa03d
+index 000000000..5b76d1f11
 --- /dev/null
 +++ b/crates/ui-egui/src/plugin_i18n.rs
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,211 @@
 +//! Custom tools share the editor's active language and translation catalogs.
 +pub(crate) fn text(source: &str) -> String {
 +    translate(&canonical(source, 0), 0)
@@ -3293,6 +3497,8 @@ index 000000000..b400aa03d
 +        let zh = crate::i18n::Lang::from_code("zh-hans").unwrap();
 +        crate::i18n::with_language(zh, || {
 +            assert_eq!(super::text("Fill selection"), "局部修改");
++            assert_eq!(super::text("Paste reference image"), "粘贴参考图");
++            assert_eq!(super::text("No image in the clipboard"), "剪贴板中没有图片");
 +            assert_eq!(super::text("Reference images selected: 5"), "已选择 5 张参考图");
 +            assert_eq!(super::text("Processing image request · waiting 48 s"), "正在处理生图请求 · 已等待 48 秒");
 +        });

@@ -4,8 +4,8 @@ import subprocess
 
 root = Path(__file__).resolve().parent
 source = root / 'research/photocraft-0.20'
-subprocess.run(['git', 'add', '-N', '--', 'crates', 'docs'], cwd=source, check=True)
-patch = subprocess.check_output(['git', 'diff', '--binary', 'HEAD', '--', 'crates', 'docs'], cwd=source)
+subprocess.run(['git', 'add', '-N', '--', 'crates', 'docs', 'apps', 'Cargo.lock'], cwd=source, check=True)
+patch = subprocess.check_output(['git', 'diff', '--binary', 'HEAD', '--', 'crates', 'docs', 'apps', 'Cargo.lock'], cwd=source)
 
 destination = root / 'native-source/photocraft-codex.patch'
 destination.write_bytes(patch)
