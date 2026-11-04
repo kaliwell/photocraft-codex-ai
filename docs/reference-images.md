@@ -1,5 +1,9 @@
 # 多图参考 / Reference images
 
+**统一开发版新增剪贴板参考图**：复制截图或图片后，点击 AI 工具栏的“粘贴参考图”，或在提示词输入框中按 `Ctrl+V`。图片会追加到参考图缩略图列表，不会粘贴为画布图层；可连续粘贴多张，仍支持逐张移除。纯文字剪贴板保持提示词粘贴，工具栏外保留画布原来的粘贴行为。剪贴板没有图片时，按钮会显示提示。该功能晚于已发布的 v0.4.0 ZIP。
+
+**Clipboard references (unified development build):** copy a screenshot/image, then click **Paste reference image** or press `Ctrl+V` in the prompt. Images are appended to the reference gallery, not inserted as canvas layers. Repeat to add more and remove individual thumbnails as usual. Text-only clipboard contents still paste into the prompt; pasting outside the composer retains normal canvas behavior. The button reports an empty/non-image clipboard. This feature is newer than the published v0.4.0 ZIP.
+
 原 Codex AI 插件现已在 PhotoCraft 0.20.1 的选区 AI 工具栏中集成参考图片。通过项目根目录的 `start.cmd` 启动，无需使用独立 Userfull Tools 整合版。
 
 1. 选择画布区域，提示词栏出现后，将图片文件直接拖到这块工具栏上。可一次拖入多张，也可点击 **参考图 ＋** 多选。

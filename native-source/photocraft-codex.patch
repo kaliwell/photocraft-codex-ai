@@ -1,5 +1,5 @@
 diff --git a/crates/automation/src/workspace.rs b/crates/automation/src/workspace.rs
-index a60cc66a..26d28196 100644
+index a60cc66a1..26d281969 100644
 --- a/crates/automation/src/workspace.rs
 +++ b/crates/automation/src/workspace.rs
 @@ -325,6 +325,11 @@ fn file_error(operation: &str, path: &str, error: std::io::Error) -> AutomationE
@@ -15,7 +15,7 @@ index a60cc66a..26d28196 100644
          id,
          "file.new"
 diff --git a/crates/automation/src/workspace/tests.rs b/crates/automation/src/workspace/tests.rs
-index e96ccb36..1cad16ac 100644
+index e96ccb369..1cad16ac9 100644
 --- a/crates/automation/src/workspace/tests.rs
 +++ b/crates/automation/src/workspace/tests.rs
 @@ -499,6 +499,21 @@ fn automation_rejects_ambient_path_commands_and_preferences() {
@@ -41,7 +41,7 @@ index e96ccb36..1cad16ac 100644
  fn registry_filesystem_path_params_are_classified() {
      let probe = serde_json::json!({
 diff --git a/crates/compose/src/advanced_tests.rs b/crates/compose/src/advanced_tests.rs
-index 15d3cf23..4e8ac354 100644
+index 15d3cf234..4e8ac3548 100644
 --- a/crates/compose/src/advanced_tests.rs
 +++ b/crates/compose/src/advanced_tests.rs
 @@ -168,7 +168,7 @@ fn knockout_follows_masks_and_transparency_shapes() {
@@ -63,7 +63,7 @@ index 15d3cf23..4e8ac354 100644
          // Default: the stroke follows the masked shape, so it runs along the mask's edge.
          check(&d, 7, 4, RED, "stroke along the mask edge");
 diff --git a/crates/compose/src/cmyk/tests.rs b/crates/compose/src/cmyk/tests.rs
-index 44b265c8..8fcae104 100644
+index 44b265c8d..8fcae1042 100644
 --- a/crates/compose/src/cmyk/tests.rs
 +++ b/crates/compose/src/cmyk/tests.rs
 @@ -38,7 +38,7 @@ fn mask(rects: &[(Rect, f32)], default: f32, density: f32, enabled: bool) -> Lay
@@ -76,7 +76,7 @@ index 44b265c8..8fcae104 100644
  
  /// An 8-bit sample as stored.
 diff --git a/crates/compose/src/fx_cache.rs b/crates/compose/src/fx_cache.rs
-index 43e524d3..707496dd 100644
+index 43e524d37..707496dd5 100644
 --- a/crates/compose/src/fx_cache.rs
 +++ b/crates/compose/src/fx_cache.rs
 @@ -61,7 +61,7 @@ pub(crate) fn layer_identity(layer: &Layer, h: &mut std::collections::hash_map::
@@ -89,7 +89,7 @@ index 43e524d3..707496dd 100644
      if let Some(vm) = &layer.vector_mask {
          format!("{vm:?}").hash(h);
 diff --git a/crates/compose/src/masks.rs b/crates/compose/src/masks.rs
-index 851c9bc5..6c8a9a70 100644
+index 851c9bc50..6c8a9a70a 100644
 --- a/crates/compose/src/masks.rs
 +++ b/crates/compose/src/masks.rs
 @@ -162,7 +162,7 @@ fn key(layer: &Layer, canvas: Rect) -> u64 {
@@ -188,7 +188,7 @@ index 851c9bc5..6c8a9a70 100644
  #[cfg(test)]
  mod tests;
 diff --git a/crates/compose/src/masks/tests.rs b/crates/compose/src/masks/tests.rs
-index 90767709..d114b77c 100644
+index 907677091..d114b77c8 100644
 --- a/crates/compose/src/masks/tests.rs
 +++ b/crates/compose/src/masks/tests.rs
 @@ -2,6 +2,33 @@ use super::*;
@@ -226,7 +226,7 @@ index 90767709..d114b77c 100644
      match lookup(c, k) {
          CachedMask::Pending(slot, _) => slot,
 diff --git a/crates/compose/src/tests.rs b/crates/compose/src/tests.rs
-index 7ea86550..ffa77205 100644
+index 7ea865509..ffa772051 100644
 --- a/crates/compose/src/tests.rs
 +++ b/crates/compose/src/tests.rs
 @@ -2076,7 +2076,7 @@ fn shapeless_fx_doc(depth: SampleType) -> Document {
@@ -257,7 +257,7 @@ index 7ea86550..ffa77205 100644
          let whole = render(&d, bounds);
          let mut changed = 0;
 diff --git a/crates/doc/src/lib.rs b/crates/doc/src/lib.rs
-index ab13697e..65ef3825 100644
+index ab13697e7..65ef38258 100644
 --- a/crates/doc/src/lib.rs
 +++ b/crates/doc/src/lib.rs
 @@ -243,6 +243,8 @@ mod label_color_tests {
@@ -279,7 +279,7 @@ index ab13697e..65ef3825 100644
      pub fn hide_all() -> Self {
          Self { surface: Surface::with_default(PixelFormat::GRAY8, &[0.0]), ..Self::reveal_all() }
 diff --git a/crates/engine/src/cmd.rs b/crates/engine/src/cmd.rs
-index e2e9c3bd..cf15b831 100644
+index e2e9c3bd7..cf15b8311 100644
 --- a/crates/engine/src/cmd.rs
 +++ b/crates/engine/src/cmd.rs
 @@ -63,6 +63,7 @@ pub mod brush_cmds;
@@ -300,7 +300,7 @@ index e2e9c3bd..cf15b831 100644
      v.extend(crate::brush_cmds::specs());
 diff --git a/crates/engine/src/cmd/clipboard_export_cmds.rs b/crates/engine/src/cmd/clipboard_export_cmds.rs
 new file mode 100644
-index 00000000..49db70b5
+index 000000000..49db70b54
 --- /dev/null
 +++ b/crates/engine/src/cmd/clipboard_export_cmds.rs
 @@ -0,0 +1,118 @@
@@ -423,7 +423,7 @@ index 00000000..49db70b5
 +    }
 +}
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds.rs b/crates/engine/src/cmd/layer_mask_props_cmds.rs
-index 64a088ea..7afac125 100644
+index 64a088ea3..7afac125e 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds.rs
 @@ -1,6 +1,9 @@
@@ -538,7 +538,7 @@ index 64a088ea..7afac125 100644
          run: edit,
          journal: true,
 diff --git a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
-index cd32de15..043ea024 100644
+index cd32de150..043ea0248 100644
 --- a/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
 +++ b/crates/engine/src/cmd/layer_mask_props_cmds/tests.rs
 @@ -7,6 +7,58 @@ use photocraft_raster::Surface;
@@ -619,7 +619,7 @@ index cd32de15..043ea024 100644
              doc.layers.push(layer);
              let mut s = Session::new();
 diff --git a/crates/engine/src/cmd/smart_cmds/filters.rs b/crates/engine/src/cmd/smart_cmds/filters.rs
-index 3009ecfb..1569a074 100644
+index 3009ecfbc..1569a0747 100644
 --- a/crates/engine/src/cmd/smart_cmds/filters.rs
 +++ b/crates/engine/src/cmd/smart_cmds/filters.rs
 @@ -54,7 +54,7 @@ fn smart_mut_of(l: &mut Layer) -> Result<&mut SmartObject> {
@@ -632,7 +632,7 @@ index 3009ecfb..1569a074 100644
  
  /// Appends a smart filter (from a `filter.*` command) and re-renders. A selection becomes the
 diff --git a/crates/engine/src/cmd/smart_svg_cmds/tests.rs b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
-index 18963ce3..07d17d32 100644
+index 18963ce37..07d17d32f 100644
 --- a/crates/engine/src/cmd/smart_svg_cmds/tests.rs
 +++ b/crates/engine/src/cmd/smart_svg_cmds/tests.rs
 @@ -102,6 +102,7 @@ fn shared_instances_keep_placement_filters_masks_and_one_undo_transaction() {
@@ -644,7 +644,7 @@ index 18963ce3..07d17d32 100644
              enabled: true,
              linked: true,
 diff --git a/crates/engine/src/cmd/smartselect_cmds/tests.rs b/crates/engine/src/cmd/smartselect_cmds/tests.rs
-index 5fecac79..fb10084f 100644
+index 5fecac796..fb10084f5 100644
 --- a/crates/engine/src/cmd/smartselect_cmds/tests.rs
 +++ b/crates/engine/src/cmd/smartselect_cmds/tests.rs
 @@ -353,6 +353,7 @@ fn refine_edge_outputs_and_undo() {
@@ -656,7 +656,7 @@ index 5fecac79..fb10084f 100644
              density: 0.75,
              feather: 3.5,
 diff --git a/crates/format/src/convert.rs b/crates/format/src/convert.rs
-index fbe121c1..840fbf92 100644
+index fbe121c15..840fbf921 100644
 --- a/crates/format/src/convert.rs
 +++ b/crates/format/src/convert.rs
 @@ -183,6 +183,7 @@ fn layer_m(l: &Layer, sink: &mut dyn Sink) -> LayerM {
@@ -702,7 +702,7 @@ index fbe121c1..840fbf92 100644
          };
          let fill_cache = match &m.fill_cache {
 diff --git a/crates/format/src/manifest.rs b/crates/format/src/manifest.rs
-index dd3a012a..116a53d4 100644
+index dd3a012ad..116a53d49 100644
 --- a/crates/format/src/manifest.rs
 +++ b/crates/format/src/manifest.rs
 @@ -165,6 +165,8 @@ pub struct VideoDataM {
@@ -715,7 +715,7 @@ index dd3a012a..116a53d4 100644
      pub enabled: bool,
      pub linked: bool,
 diff --git a/crates/format/tests/it/common/mod.rs b/crates/format/tests/it/common/mod.rs
-index ce0381ff..13ed4fa8 100644
+index ce0381ff7..13ed4fa83 100644
 --- a/crates/format/tests/it/common/mod.rs
 +++ b/crates/format/tests/it/common/mod.rs
 @@ -188,6 +188,7 @@ pub fn rich_doc(mode: ColorMode, depth: SampleType) -> Document {
@@ -727,7 +727,7 @@ index ce0381ff..13ed4fa8 100644
                  enabled: true,
                  linked: false,
 diff --git a/crates/format/tests/it/roundtrip.rs b/crates/format/tests/it/roundtrip.rs
-index be016f0a..84033f0d 100644
+index be016f0aa..84033f0d7 100644
 --- a/crates/format/tests/it/roundtrip.rs
 +++ b/crates/format/tests/it/roundtrip.rs
 @@ -11,6 +11,18 @@ use photocraft_raster::Rgba8Image;
@@ -750,7 +750,7 @@ index be016f0a..84033f0d 100644
  fn gradient_overlay_interpolation_roundtrips_in_native_documents() {
      use photocraft_doc::effects::GradientInterpolation;
 diff --git a/crates/io/src/affinity.rs b/crates/io/src/affinity.rs
-index 4e5ed90f..0d82a328 100644
+index 4e5ed90f8..0d82a3282 100644
 --- a/crates/io/src/affinity.rs
 +++ b/crates/io/src/affinity.rs
 @@ -327,7 +327,7 @@ impl Builder {
@@ -763,7 +763,7 @@ index 4e5ed90f..0d82a328 100644
          Some(l)
      }
 diff --git a/crates/io/src/flat.rs b/crates/io/src/flat.rs
-index 9863bdf9..881803ff 100644
+index 9863bdf9b..881803ff4 100644
 --- a/crates/io/src/flat.rs
 +++ b/crates/io/src/flat.rs
 @@ -1589,6 +1589,7 @@ mod streamed_png_tests {
@@ -775,7 +775,7 @@ index 9863bdf9..881803ff 100644
              enabled: true,
              linked: true,
 diff --git a/crates/io/src/psd_import.rs b/crates/io/src/psd_import.rs
-index a70577fb..a98e4853 100644
+index a70577fb6..a98e48531 100644
 --- a/crates/io/src/psd_import.rs
 +++ b/crates/io/src/psd_import.rs
 @@ -393,6 +393,7 @@ impl Ctx<'_> {
@@ -787,7 +787,7 @@ index a70577fb..a98e4853 100644
              enabled: flags & 2 == 0,
              linked: flags & 1 == 0,
 diff --git a/crates/io/src/smart_map.rs b/crates/io/src/smart_map.rs
-index cacce2b7..d46ccb0c 100644
+index cacce2b7c..d46ccb0c6 100644
 --- a/crates/io/src/smart_map.rs
 +++ b/crates/io/src/smart_map.rs
 @@ -178,7 +178,7 @@ pub fn mask_from_item(item: &FilterEffectsItem, sample: SampleType, stack: &Filt
@@ -800,7 +800,7 @@ index cacce2b7..d46ccb0c 100644
  
  /// The unfiltered placed pixels of an `FEid` item (the inverse of [`feid_item`]), in `fmt`: colour
 diff --git a/crates/io/src/xcf.rs b/crates/io/src/xcf.rs
-index e9a6b92a..4bd45a7e 100644
+index e9a6b92a2..4bd45a7ee 100644
 --- a/crates/io/src/xcf.rs
 +++ b/crates/io/src/xcf.rs
 @@ -1079,7 +1079,7 @@ impl<'a> Image<'a> {
@@ -813,7 +813,7 @@ index e9a6b92a..4bd45a7e 100644
          let linear = composite_space.unsigned_abs() == 1 || blend_space.unsigned_abs() == 1;
          Ok(Some((Node { layer, path, group, children: Vec::new() }, linear)))
 diff --git a/crates/io/tests/it/adjust_blend_roundtrip.rs b/crates/io/tests/it/adjust_blend_roundtrip.rs
-index bab904f5..43438423 100644
+index bab904f58..43438423b 100644
 --- a/crates/io/tests/it/adjust_blend_roundtrip.rs
 +++ b/crates/io/tests/it/adjust_blend_roundtrip.rs
 @@ -151,7 +151,14 @@ fn adjustment_doc(adj: &Adjustment, depth: SampleType) -> Document {
@@ -850,7 +850,7 @@ index bab904f5..43438423 100644
      let mut clipped = raster("clipped", fmt, Rect::new(0, 0, 12, 16), 3, true);
      clipped.clipped = true;
 diff --git a/crates/io/tests/it/cmyk_composite_export.rs b/crates/io/tests/it/cmyk_composite_export.rs
-index 77f35a62..ba13519d 100644
+index 77f35a62d..ba13519d0 100644
 --- a/crates/io/tests/it/cmyk_composite_export.rs
 +++ b/crates/io/tests/it/cmyk_composite_export.rs
 @@ -30,6 +30,7 @@ fn mixed_region_document(depth: SampleType, opaque: bool) -> Document {
@@ -862,7 +862,7 @@ index 77f35a62..ba13519d 100644
          enabled: true,
          linked: true,
 diff --git a/crates/io/tests/it/common/mod.rs b/crates/io/tests/it/common/mod.rs
-index 7bb010f1..304a1ab4 100644
+index 7bb010f1b..304a1ab40 100644
 --- a/crates/io/tests/it/common/mod.rs
 +++ b/crates/io/tests/it/common/mod.rs
 @@ -107,13 +107,26 @@ pub fn gen_doc(mode: ColorMode, depth: SampleType, f: Features) -> Document {
@@ -896,7 +896,7 @@ index 7bb010f1..304a1ab4 100644
      }
  
 diff --git a/crates/io/tests/it/psd_empty_channels.rs b/crates/io/tests/it/psd_empty_channels.rs
-index 610bb145..270a0794 100644
+index 610bb145c..270a07948 100644
 --- a/crates/io/tests/it/psd_empty_channels.rs
 +++ b/crates/io/tests/it/psd_empty_channels.rs
 @@ -12,6 +12,7 @@ fn empty_layer_and_mask_channels_use_raw_without_a_payload() {
@@ -908,7 +908,7 @@ index 610bb145..270a0794 100644
                      enabled: true,
                      linked: true,
 diff --git a/crates/ui-egui/src/app.rs b/crates/ui-egui/src/app.rs
-index 3015f021..9c160fbe 100644
+index 3015f0214..9c160fbe9 100644
 --- a/crates/ui-egui/src/app.rs
 +++ b/crates/ui-egui/src/app.rs
 @@ -186,6 +186,7 @@ impl PhotocraftApp {
@@ -920,7 +920,7 @@ index 3015f021..9c160fbe 100644
              save_dirs: HashMap::new(),
              disk_stamps: HashMap::new(),
 diff --git a/crates/ui-egui/src/app/clipboard.rs b/crates/ui-egui/src/app/clipboard.rs
-index 54d4de90..84f3ed92 100644
+index 54d4de90b..84f3ed920 100644
 --- a/crates/ui-egui/src/app/clipboard.rs
 +++ b/crates/ui-egui/src/app/clipboard.rs
 @@ -78,6 +78,36 @@ impl PhotocraftApp {
@@ -961,7 +961,7 @@ index 54d4de90..84f3ed92 100644
      pub(super) fn export_os_clipboard(&mut self) {
          self.clip_unmirrored = true;
 diff --git a/crates/ui-egui/src/app/clipboard_tests.rs b/crates/ui-egui/src/app/clipboard_tests.rs
-index 956776a5..0f6ea918 100644
+index 956776a50..0f6ea9182 100644
 --- a/crates/ui-egui/src/app/clipboard_tests.rs
 +++ b/crates/ui-egui/src/app/clipboard_tests.rs
 @@ -180,6 +180,51 @@ fn action_vector_paste_reads_the_current_svg_source() {
@@ -1017,7 +1017,7 @@ index 956776a5..0f6ea918 100644
  fn failed_clipboard_reads_preserve_editable_contents_until_retry() {
      use std::sync::atomic::{AtomicBool, Ordering};
 diff --git a/crates/ui-egui/src/app/commands.rs b/crates/ui-egui/src/app/commands.rs
-index 1a43ffe7..7844e43e 100644
+index 1a43ffe77..7844e43e0 100644
 --- a/crates/ui-egui/src/app/commands.rs
 +++ b/crates/ui-egui/src/app/commands.rs
 @@ -54,6 +54,24 @@ impl PhotocraftApp {
@@ -1046,10 +1046,18 @@ index 1a43ffe7..7844e43e 100644
          // (#5667): History reads the transform (or Place Embedded), then New Layer. Only for a
          // command that can run; a transform refused or still being applied keeps the box open and
 diff --git a/crates/ui-egui/src/app/frame.rs b/crates/ui-egui/src/app/frame.rs
-index 07ea17b7..dc59b7c8 100644
+index 07ea17b7e..34747f0f1 100644
 --- a/crates/ui-egui/src/app/frame.rs
 +++ b/crates/ui-egui/src/app/frame.rs
-@@ -113,7 +113,9 @@ impl PhotocraftApp {
+@@ -81,6 +81,7 @@ impl PhotocraftApp {
+         // Background jobs: apply finished ones, keep frames coming, Esc cancels (before the
+         // shortcuts see Esc).
+         if !screen_picker::tick(self, ctx) {
++            crate::codex_ai::paste_events(self, ctx);
+             jobs_ui::tick(self, ctx);
+             #[cfg(not(target_arch = "wasm32"))]
+             crate::dialogs::filter_preview_worker::discard_closed(self);
+@@ -113,7 +114,9 @@ impl PhotocraftApp {
          let dropped = ctx.input(|i| i.raw.dropped_files.clone());
          if !dropped.is_empty() {
              let at = self.services.cursor_pos.as_mut().and_then(|f| f(ctx));
@@ -1060,7 +1068,7 @@ index 07ea17b7..dc59b7c8 100644
              // Files dragged in from another app's window: PhotoCraft comes to the front and takes
              // the keyboard, as Photoshop does, instead of staying behind the source (#5687).
              ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-@@ -309,6 +311,7 @@ impl PhotocraftApp {
+@@ -309,6 +312,7 @@ impl PhotocraftApp {
          workspace_ui::windows(self, &ctx);
          palette::show(self, &ctx);
          dialogs::show(self, &ctx);
@@ -1069,7 +1077,7 @@ index 07ea17b7..dc59b7c8 100644
          rasterize_prompt::run_pending(self, &ctx);
          jobs_ui::dialog(self, &ctx);
 diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
-index 12b4a8a7..55fd3806 100644
+index 12b4a8a76..55fd38064 100644
 --- a/crates/ui-egui/src/canvas.rs
 +++ b/crates/ui-egui/src/canvas.rs
 @@ -2074,6 +2074,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
@@ -1084,10 +1092,10 @@ index 12b4a8a7..55fd3806 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 00000000..f675f50b
+index 000000000..bbe84503e
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,656 @@
+@@ -0,0 +1,805 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1118,6 +1126,8 @@ index 00000000..f675f50b
 +    buttons: Vec<(String, Rect)>,
 +    references: Vec<Reference>,
 +    loading: bool,
++    prompt_focused: bool,
++    suppress_paste_release: bool,
 +}
 +
 +type Shared = Arc<Mutex<Status>>;
@@ -1180,6 +1190,7 @@ index 00000000..f675f50b
 +        state.rect = None;
 +        state.input = None;
 +        state.buttons.clear();
++        state.prompt_focused = false;
 +    }
 +    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
 +        return;
@@ -1190,10 +1201,11 @@ index 00000000..f675f50b
 +    }
 +    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
 +    let width = (xf.rect.width() - 24.0).clamp(280.0, 560.0);
-+    let size = vec2(width, 124.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
++    let size = vec2(width, 152.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
 +    let anchor = position(selection, xf.rect, size);
 +    let tokens = Tokens::get(ctx);
 +    let mut input_rect = None;
++    let mut prompt_focused = false;
 +    let mut button_rects = Vec::new();
 +    let area = egui::Area::new(egui::Id::unique("codex-ai-toolbar")).order(egui::Order::Foreground).fixed_pos(anchor).movable(false).show(ctx, |ui| {
 +        ui.set_clip_rect(xf.rect);
@@ -1209,8 +1221,19 @@ index 00000000..f675f50b
 +                        .desired_width(f32::INFINITY),
 +                );
 +                input_rect = Some(input.rect);
++                prompt_focused = input.has_focus();
 +                ui.label(l("Drop reference images here · Multiple images supported; limits checked by Codex"));
 +                button_rects = actions(app, ui, &snapshot);
++                let paste = ui
++                    .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
++                    .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
++                button_rects.push(("Paste reference image".into(), paste.rect));
++                if paste.clicked() {
++                    let result = paste_reference(app, ctx);
++                    if let Err(error) = result {
++                        reference_error(ctx, error);
++                    }
++                }
 +                if !snapshot.references.is_empty() {
 +                    let mut remove = None;
 +                    egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
@@ -1255,6 +1278,92 @@ index 00000000..f675f50b
 +    state.rect = Some(area.response.rect);
 +    state.input = input_rect;
 +    state.buttons = button_rects;
++    state.prompt_focused = prompt_focused;
++}
++
++fn reference_error(ctx: &Context, error: String) {
++    let state = shared(ctx);
++    let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++    state.message = error;
++    state.error = true;
++}
++
++fn queue_clipboard_image(ctx: &Context, width: u32, height: u32, rgba: Vec<u8>) -> Result<Value, String> {
++    let bytes = u64::from(width).checked_mul(u64::from(height)).and_then(|n| n.checked_mul(4)).unwrap_or(u64::MAX);
++    if width == 0 || height == 0 || bytes > MAX_REFERENCE_TOTAL as u64 || bytes != rgba.len() as u64 {
++        return Err(l("Clipboard image is invalid or too large"));
++    }
++    queue_reference_input(ctx.clone(), move || {
++        let image = photocraft_codecs::Image::from_u8(width, height, photocraft_codecs::ChannelLayout::Rgba, rgba).map_err(|e| e.to_string())?;
++        let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).map_err(|e| e.to_string())?;
++        Ok(crate::FileDialogAnswer::Contents("clipboard.png".into(), png))
++    })
++}
++
++fn paste_reference(app: &mut PhotocraftApp, ctx: &Context) -> Result<Value, String> {
++    let image = app.services.clipboard_get_image.as_mut().ok_or_else(|| l("Clipboard image reading is unavailable"))?()?;
++    let (w, h, rgba) = image.ok_or_else(|| l("No image in the clipboard"))?;
++    queue_clipboard_image(ctx, w, h, rgba)
++}
++
++/// Only the visible composer owns image pastes while hovered or its prompt has focus.
++/// Text-only pastes and pastes elsewhere retain the editor's existing behavior.
++pub fn paste_events(app: &mut PhotocraftApp, ctx: &Context) {
++    let state = shared(ctx);
++    {
++        let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        if s.suppress_paste_release {
++            ctx.input_mut(|i| {
++                i.events.retain(|e| {
++                    if matches!(e, egui::Event::Key { key: egui::Key::V, pressed: false, .. }) {
++                        s.suppress_paste_release = false;
++                        false
++                    } else {
++                        true
++                    }
++                })
++            });
++        }
++    }
++    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
++        return;
++    }
++    let targeted = {
++        let s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        s.rect.is_some_and(|r| s.prompt_focused || ctx.pointer_hover_pos().is_some_and(|p| r.contains(p)))
++    };
++    if !targeted || app.session.active().is_none_or(|d| d.doc.selection.is_none()) {
++        return;
++    }
++    let (image, requested) = ctx.input(|i| {
++        (
++            i.events.iter().find_map(|e| if let egui::Event::PasteImage(image) = e { Some(image.clone()) } else { None }),
++            i.events.iter().any(|e| {
++                matches!(e, egui::Event::Paste(_)) || matches!(e, egui::Event::Key { key: egui::Key::V, pressed: true, modifiers, .. } if modifiers.command)
++            }),
++        )
++    });
++    let result = if let Some(image) = image {
++        let rgba = image.pixels.iter().flat_map(|p| p.to_srgba_unmultiplied()).collect();
++        Some(queue_clipboard_image(ctx, image.width() as u32, image.height() as u32, rgba))
++    } else if requested {
++        match app.services.clipboard_get_image.as_mut().map(|get| get()) {
++            Some(Ok(Some((w, h, rgba)))) => Some(queue_clipboard_image(ctx, w, h, rgba)),
++            Some(Err(e)) => Some(Err(e)),
++            _ => None,
++        }
++    } else {
++        None
++    };
++    if let Some(result) = result {
++        state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).suppress_paste_release = true;
++        ctx.input_mut(|i| {
++            i.events.retain(|e| !matches!(e, egui::Event::Paste(_) | egui::Event::PasteImage(_)) && !matches!(e, egui::Event::Key { key: egui::Key::V, .. }))
++        });
++        if let Err(error) = result {
++            reference_error(ctx, error);
++        }
++    }
 +}
 +
 +fn actions(app: &mut PhotocraftApp, ui: &mut egui::Ui, status: &Status) -> Vec<(String, Rect)> {
@@ -1636,6 +1745,54 @@ index 00000000..f675f50b
 +mod tests {
 +    use super::{Context, PhotocraftApp, Rect, ViewXform, json, pos2, position, selection_rect, vec2};
 +    #[test]
++    fn clipboard_reference_routing_preserves_document_and_consumes_image_paste() {
++        let services = crate::Services { clipboard_get_image: Some(Box::new(|| Ok(Some((2, 2, vec![128; 16]))))), ..Default::default() };
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services);
++        app.run("file.new", json!({"width":100,"height":100})).unwrap();
++        app.run("select.rect", json!({"x":0,"y":0,"width":20,"height":20})).unwrap();
++        let revision = app.session.active().unwrap().revision;
++        let ctx = Context::default();
++        let shared = super::shared(&ctx);
++        {
++            let mut s = shared.lock().unwrap();
++            s.rect = Some(Rect::EVERYTHING);
++            s.prompt_focused = true;
++        }
++        ctx.input_mut(|i| i.events.push(egui::Event::Paste("".into())));
++        super::paste_events(&mut app, &ctx);
++        assert!(ctx.input(|i| i.events.is_empty()));
++        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++        while shared.lock().unwrap().loading && std::time::Instant::now() < deadline {
++            std::thread::sleep(std::time::Duration::from_millis(10));
++        }
++        let s = shared.lock().unwrap();
++        assert!(!s.error, "{}", s.message);
++        assert_eq!(s.references.len(), 1);
++        assert_eq!(s.references[0].name, "clipboard.png");
++        assert_eq!(app.session.active().unwrap().revision, revision);
++    }
++    #[test]
++    fn text_pastes_and_canvas_pastes_remain_available() {
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        app.run("file.new", json!({"width":100,"height":100})).unwrap();
++        app.run("select.rect", json!({"x":0,"y":0,"width":20,"height":20})).unwrap();
++        let ctx = Context::default();
++        {
++            let shared = super::shared(&ctx);
++            let mut s = shared.lock().unwrap();
++            s.rect = Some(Rect::EVERYTHING);
++            s.prompt_focused = true;
++        }
++        ctx.input_mut(|i| i.events.push(egui::Event::Paste("my prompt".into())));
++        super::paste_events(&mut app, &ctx);
++        assert_eq!(ctx.input(|i| i.events.len()), 1);
++        super::shared(&ctx).lock().unwrap().rect = None;
++        super::paste_events(&mut app, &ctx);
++        assert_eq!(ctx.input(|i| i.events.len()), 1);
++        assert!(super::queue_clipboard_image(&ctx, 100, 100, vec![1]).is_err());
++        assert!(super::queue_clipboard_image(&ctx, u32::MAX, u32::MAX, vec![]).is_err());
++    }
++    #[test]
 +    fn multiple_reference_selection_keeps_order_and_payload() {
 +        use base64::Engine;
 +        let image = photocraft_codecs::Image::from_u8(8, 6, photocraft_codecs::ChannelLayout::Rgba, vec![128; 8 * 6 * 4]).unwrap();
@@ -1745,7 +1902,7 @@ index 00000000..f675f50b
 +    }
 +}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
-index e979d3d8..526784f8 100644
+index e979d3d82..526784f8e 100644
 --- a/crates/ui-egui/src/control.rs
 +++ b/crates/ui-egui/src/control.rs
 @@ -209,6 +209,7 @@ pub(super) const METHODS: &[&str] = &[
@@ -1757,7 +1914,7 @@ index e979d3d8..526784f8 100644
      "ui.window.open",
  ];
 diff --git a/crates/ui-egui/src/control/dispatch.rs b/crates/ui-egui/src/control/dispatch.rs
-index 3c7b22dd..581d7d68 100644
+index 3c7b22dda..581d7d683 100644
 --- a/crates/ui-egui/src/control/dispatch.rs
 +++ b/crates/ui-egui/src/control/dispatch.rs
 @@ -1056,6 +1056,7 @@ fn dialog_confirm_or_apply(app: &mut PhotocraftApp, req: &ControlRequest, id: u6
@@ -1769,7 +1926,7 @@ index 3c7b22dd..581d7d68 100644
          "ui.click" | "ui.move" => click(app, ctx, p, req.method == "ui.click"),
          "ui.key" => key(app, ctx, p),
 diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
-index 4e09d79a..c3dad485 100644
+index 4e09d79a1..c3dad4856 100644
 --- a/crates/ui-egui/src/control/inspect.rs
 +++ b/crates/ui-egui/src/control/inspect.rs
 @@ -29,7 +29,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
@@ -1803,7 +1960,7 @@ index 4e09d79a..c3dad485 100644
  
  pub fn save_screenshot(app: &mut PhotocraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
 diff --git a/crates/ui-egui/src/dialogs/adjust_preview.rs b/crates/ui-egui/src/dialogs/adjust_preview.rs
-index 5d060f2c..7e72e745 100644
+index 5d060f2c6..7e72e7450 100644
 --- a/crates/ui-egui/src/dialogs/adjust_preview.rs
 +++ b/crates/ui-egui/src/dialogs/adjust_preview.rs
 @@ -101,7 +101,7 @@ pub fn base_document(doc: &Document, target: LayerId) -> Result<Document, String
@@ -1816,7 +1973,7 @@ index 5d060f2c..7e72e745 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef278822..8b2e5a02 100644
+index ef2788221..fa0a40ea6 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -1830,7 +1987,7 @@ index ef278822..8b2e5a02 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,95 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,101 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -1926,11 +2083,17 @@ index ef278822..8b2e5a02 100644
 +	Reference image exceeds the local 100-million-pixel decode guard.	参考图超过本地解码保护阈值 1 亿像素。
 +
 +# Userfull Tools language integration
++
++Paste reference image	粘贴参考图
++Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
++Clipboard image is invalid or too large	剪贴板图片无效或过大
++Clipboard image reading is unavailable	当前无法读取剪贴板图片
++No image in the clipboard	剪贴板中没有图片
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3a..12c5576a 100644
+index c0bb1a3ab..5aaaf0c9b 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,103 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,109 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2034,8 +2197,14 @@ index c0bb1a3a..12c5576a 100644
 +	Reference image exceeds the local 100-million-pixel decode guard.	参考图超过本地解码保护阈值 1 亿像素。
 +
 +# Userfull Tools language integration
++
++Paste reference image	粘贴参考图
++Paste an image from the clipboard, or press Ctrl+V in the prompt	粘贴剪贴板图片，或在提示词输入框按 Ctrl+V
++Clipboard image is invalid or too large	剪贴板图片无效或过大
++Clipboard image reading is unavailable	当前无法读取剪贴板图片
++No image in the clipboard	剪贴板中没有图片
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
-index 509bfbd2..8176aa44 100644
+index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
 +++ b/crates/ui-egui/src/input/shortcuts.rs
 @@ -467,6 +467,7 @@ pub(crate) fn handle_forwarded(app: &mut PhotocraftApp, ctx: &egui::Context, eve
@@ -2047,7 +2216,7 @@ index 509bfbd2..8176aa44 100644
      if !held {
          ctx.data_mut(|d| d.remove_temp::<std::collections::BTreeSet<Key>>(forwarded_down_id()));
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 8165b8a4..6e9648be 100644
+index 8165b8a41..6e9648be5 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -26,6 +26,9 @@ macro_rules! tl {
@@ -2070,7 +2239,7 @@ index 8165b8a4..6e9648be 100644
      /// Where each document was last saved or exported to through a dialog (#1826): its next Save
 diff --git a/crates/ui-egui/src/long_cut.rs b/crates/ui-egui/src/long_cut.rs
 new file mode 100644
-index 00000000..12e19730
+index 000000000..12e197305
 --- /dev/null
 +++ b/crates/ui-egui/src/long_cut.rs
 @@ -0,0 +1,566 @@
@@ -2641,7 +2810,7 @@ index 00000000..12e19730
 +    }
 +}
 diff --git a/crates/ui-egui/src/menu_catalog.rs b/crates/ui-egui/src/menu_catalog.rs
-index 1d980286..e4227ef2 100644
+index 1d9802862..e4227ef2e 100644
 --- a/crates/ui-egui/src/menu_catalog.rs
 +++ b/crates/ui-egui/src/menu_catalog.rs
 @@ -19,6 +19,8 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
@@ -2654,7 +2823,7 @@ index 1d980286..e4227ef2 100644
      (&["File", "Export"], "Export Preferences…", None, "file.export.exportPreferences"),
      (&["File", "Export"], "---", None, "---"),
 diff --git a/crates/ui-egui/src/menus/state.rs b/crates/ui-egui/src/menus/state.rs
-index c932ca09..c97f4694 100644
+index c932ca092..c97f46942 100644
 --- a/crates/ui-egui/src/menus/state.rs
 +++ b/crates/ui-egui/src/menus/state.rs
 @@ -68,6 +68,8 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
@@ -2667,7 +2836,7 @@ index c932ca09..c97f4694 100644
              app.session.active().is_some() && app.services.export.is_some()
          }
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui.rs b/crates/ui-egui/src/panels/layer_menu_ui.rs
-index f274e286..d5ecd95b 100644
+index f274e2862..d5ecd95be 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui.rs
 +++ b/crates/ui-egui/src/panels/layer_menu_ui.rs
 @@ -147,6 +147,10 @@ pub fn show(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, on_set: bo
@@ -2766,7 +2935,7 @@ index f274e286..d5ecd95b 100644
  /// first when it isn't the active layer.
  pub fn show_effects(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, actions: &mut Vec<(String, Value)>) {
 diff --git a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
-index a7ab70a7..3acdcc91 100644
+index a7ab70a76..3acdcc919 100644
 --- a/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
 +++ b/crates/ui-egui/src/panels/layer_menu_ui/tests.rs
 @@ -1,5 +1,24 @@
@@ -2795,7 +2964,7 @@ index a7ab70a7..3acdcc91 100644
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/panels/title_bar.rs b/crates/ui-egui/src/panels/title_bar.rs
-index fd760ec7..cb606e06 100644
+index fd760ec71..cb606e064 100644
 --- a/crates/ui-egui/src/panels/title_bar.rs
 +++ b/crates/ui-egui/src/panels/title_bar.rs
 @@ -8,6 +8,7 @@ use super::{PhotocraftApp, Sense, Tokens, icons, theme, vec2, widgets};
@@ -2920,7 +3089,7 @@ index fd760ec7..cb606e06 100644
 +}
 diff --git a/crates/ui-egui/src/plugin_i18n.rs b/crates/ui-egui/src/plugin_i18n.rs
 new file mode 100644
-index 00000000..b400aa03
+index 000000000..b400aa03d
 --- /dev/null
 +++ b/crates/ui-egui/src/plugin_i18n.rs
 @@ -0,0 +1,209 @@
@@ -3134,7 +3303,7 @@ index 00000000..b400aa03
 +    }
 +}
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
-index c18a418c..9ca77a18 100644
+index c18a418c4..9ca77a184 100644
 --- a/crates/ui-egui/src/state.rs
 +++ b/crates/ui-egui/src/state.rs
 @@ -204,6 +204,9 @@ pub struct DocWindow {
@@ -3156,7 +3325,7 @@ index c18a418c..9ca77a18 100644
              group_tools: Vec::new(),
              spring: None,
 diff --git a/docs/control-protocol.md b/docs/control-protocol.md
-index 7c5f4f2c..bdca088b 100644
+index 7c5f4f2c2..bdca088b0 100644
 --- a/docs/control-protocol.md
 +++ b/docs/control-protocol.md
 @@ -46,6 +46,8 @@ The transport is `apps/photocraft/src/control_server.rs`, and the handlers are i
@@ -3177,7 +3346,7 @@ index 7c5f4f2c..bdca088b 100644
 +
 +Long-image cutter: invoke `tools.longCut.open` with `{}` through the UI command/menu path. `ui.inspect.longCut` reports `open`, canvas `width`/`height`, original-pixel `cuts`, `pieces`, `busy`, and the source widget `sourceRect` in screen points. File exports use interactive Save dialogs; the tool does not accept arbitrary output paths through this command.
 diff --git a/docs/parity-checklist.md b/docs/parity-checklist.md
-index 5c747e5d..ffbc03b5 100644
+index 5c747e5d5..ffbc03b57 100644
 --- a/docs/parity-checklist.md
 +++ b/docs/parity-checklist.md
 @@ -2,11 +2,11 @@

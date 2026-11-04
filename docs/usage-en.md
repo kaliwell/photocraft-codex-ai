@@ -10,6 +10,7 @@ These screenshots show the unified development build on PhotoCraft 0.20.1 (merge
 
 1. Launch with `start.cmd`, open an image and create a selection.
 2. Use the reference-images button to select multiple files, or drop pictures onto the AI composer. Click `×` below a thumbnail to remove that reference.
+   Use **Paste reference image** or press `Ctrl+V` in the prompt to attach an image from the clipboard.
 3. Refer to “reference 1” and “reference 2” in your prompt, then choose **Fill selection**, **Remove object** or **Generate image**. Codex validates actual attachment-count limits; local resource guards also apply.
 4. Results become new layers with undo support. Right-click an AI result layer to adjust edge feathering.
 
