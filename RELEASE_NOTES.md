@@ -1,8 +1,8 @@
 # Unreleased / 统一开发版新增
 
-- 提示词与参考图历史：自动记录生成输入、保存草稿、恢复前备份当前输入；仅恢复输入区，跨重启保留，最近 50 条且合计最多 512 MiB。
+- 提示词与参考图历史：自动记录生成输入、保存草稿、恢复不新增记录，相同内容去重；仅恢复输入区，跨重启保留，最近 50 条且合计最多 512 MiB。
 - 剪贴板参考图：按钮或提示词中 Ctrl+V 追加图片，兼容 Windows DIB/DIBV5，保留文字与画布粘贴。
-- Prompt/reference history with draft saving and restore, preserving the current draft before rollback; local persistence with 50-entry / 512 MiB retention. Clipboard references support Windows DIB/DIBV5 while preserving text/canvas paste.
+- Prompt/reference history with draft saving and restore, read-only rollback and duplicate snapshot reuse; local persistence with 50-entry / 512 MiB retention. Clipboard references support Windows DIB/DIBV5 while preserving text/canvas paste.
 
 These features are newer than the published v0.4.0 ZIP. / 这些功能尚不在已发布的 v0.4.0 ZIP 中。
 

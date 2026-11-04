@@ -143,11 +143,6 @@ def handler(worker: NativeWorker, token: str):
                     return
                 elif self.path == '/history/restore':
                     restored=worker.history.restore(request.get('id'))
-                    draft=request.get('draft')
-                    if draft is not None and not isinstance(draft,dict):
-                        raise ValueError('Invalid history draft')
-                    if draft and (draft.get('prompt') or draft.get('references')):
-                        worker.history.save(draft)
                     self.respond(200, {**restored, 'entries':worker.history.list()})
                     return
                 elif self.path == '/generate':

@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..3ef2d925a
+index 000000000..24d810622
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,855 @@
+@@ -0,0 +1,851 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1398,10 +1398,6 @@ index 000000000..3ef2d925a
 +        state.current_prompt = app.ui.codex_ai_prompt.clone();
 +    }
 +    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
-+        return;
-+    }
-+    if history_is_open(ctx) {
-+        history::show(app, ctx);
 +        return;
 +    }
 +    let Some(selection) = selection_rect(app, ctx, xf) else { return };
@@ -2142,10 +2138,10 @@ index 000000000..3ef2d925a
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..5e9a0d7d7
+index 000000000..cee30a45b
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,161 @@
 +use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
 +#[cfg(not(target_arch = "wasm32"))]
 +use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
@@ -2169,7 +2165,7 @@ index 000000000..5e9a0d7d7
 +    }
 +}
 +
-+pub(super) fn show(app: &PhotocraftApp, ctx: &Context) {
++pub(super) fn show(_app: &PhotocraftApp, ctx: &Context) {
 +    let state = shared(ctx);
 +    let snapshot = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
 +    if !snapshot.history_open {
@@ -2179,46 +2175,52 @@ index 000000000..5e9a0d7d7
 +    let mut restore = None;
 +    let mut close = false;
 +    let mut buttons = Vec::new();
-+    egui::Window::new(l("Prompt and reference history")).id(egui::Id::unique("codex-history-window")).open(&mut open).default_width(600.0).show(ctx, |ui| {
-+        ui.label(l("Restoring replaces the prompt and references only; the current draft is saved first."));
-+        ui.label(l("Local history: up to 50 entries and 512 MiB. Older entries are removed automatically."));
-+        if snapshot.loading {
-+            ui.spinner();
-+        }
-+        if !snapshot.history_notice.is_empty() {
-+            ui.label(&snapshot.history_notice);
-+        }
-+        if snapshot.history_rows.is_empty() {
-+            ui.label(l("No saved history yet"));
-+        }
-+        egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
-+            for row in &snapshot.history_rows {
-+                ui.group(|ui| {
-+                    ui.horizontal(|ui| {
-+                        ui.label(row.get("display_time").and_then(Value::as_str).unwrap_or(""));
-+                        let mode = match row.get("mode").and_then(Value::as_str) {
-+                            Some("fill") => "Fill selection",
-+                            Some("remove") => "Remove object",
-+                            _ => "Generate image",
-+                        };
-+                        ui.label(l(mode));
-+                        ui.label(format!("{}: {}", l("Reference images"), row.get("references").and_then(Value::as_u64).unwrap_or(0)));
-+                    });
-+                    ui.label(row.get("prompt").and_then(Value::as_str).unwrap_or(""));
-+                    let b = ui.add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Restore this draft")));
-+                    if let Some(id) = row.get("id").and_then(Value::as_str) {
-+                        buttons.push((format!("Restore history {id}"), b.rect));
-+                        if b.clicked() {
-+                            restore = Some(id.to_owned());
-+                        }
-+                    }
-+                });
++    egui::Window::new(l("Prompt and reference history"))
++        .id(egui::Id::unique("codex-history-window-side"))
++        .open(&mut open)
++        .order(egui::Order::Foreground)
++        .default_pos(egui::pos2((ctx.content_rect().right() - 470.0).max(0.0), 80.0))
++        .default_width(440.0)
++        .show(ctx, |ui| {
++            ui.label(l("Restoring changes inputs only and does not create a history entry. Save your draft first if needed."));
++            ui.label(l("Local history: up to 50 entries and 512 MiB. Older entries are removed automatically."));
++            if snapshot.loading {
++                ui.spinner();
 +            }
++            if !snapshot.history_notice.is_empty() {
++                ui.label(&snapshot.history_notice);
++            }
++            if snapshot.history_rows.is_empty() {
++                ui.label(l("No saved history yet"));
++            }
++            egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
++                for row in &snapshot.history_rows {
++                    ui.group(|ui| {
++                        ui.horizontal_wrapped(|ui| {
++                            ui.label(row.get("display_time").and_then(Value::as_str).unwrap_or(""));
++                            let mode = match row.get("mode").and_then(Value::as_str) {
++                                Some("fill") => "Fill selection",
++                                Some("remove") => "Remove object",
++                                _ => "Generate image",
++                            };
++                            ui.label(l(mode));
++                            ui.label(format!("{}: {}", l("Reference images"), row.get("references").and_then(Value::as_u64).unwrap_or(0)));
++                        });
++                        ui.label(row.get("prompt").and_then(Value::as_str).unwrap_or(""));
++                        let b = ui.add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Restore this draft")));
++                        if let Some(id) = row.get("id").and_then(Value::as_str) {
++                            buttons.push((format!("Restore history {id}"), b.rect));
++                            if b.clicked() {
++                                restore = Some(id.to_owned());
++                            }
++                        }
++                    });
++                }
++            });
++            let b = ui.button(l("Close"));
++            buttons.push(("Close history".into(), b.rect));
++            close = b.clicked();
 +        });
-+        let b = ui.button(l("Close"));
-+        buttons.push(("Close history".into(), b.rect));
-+        close = b.clicked();
-+    });
 +    if close {
 +        open = false;
 +    }
@@ -2228,7 +2230,7 @@ index 000000000..5e9a0d7d7
 +        s.buttons.extend(buttons);
 +    }
 +    if let Some(id) = restore {
-+        request(ctx, "/history/restore", json!({"id":id,"draft":draft(app,&snapshot)}));
++        request(ctx, "/history/restore", json!({"id":id}));
 +    }
 +}
 +
@@ -2373,7 +2375,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..3f048b8b3 100644
+index ef2788221..9350b1e16 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2387,7 +2389,7 @@ index ef2788221..3f048b8b3 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,113 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,114 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2501,11 +2503,12 @@ index ef2788221..3f048b8b3 100644
 +	History response exceeds the local size guard	历史记录超过本地资源限制
 +	Local history is unavailable in the web build	网页版无法使用本机历史记录
 +	Restore this draft	恢复此记录
++	Restoring changes inputs only and does not create a history entry. Save your draft first if needed.	恢复只切换输入内容，不新增历史记录。需要保留当前内容时，请先保存草稿。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..5b23c1881 100644
+index c0bb1a3ab..cd4c4dc37 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,121 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,122 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2627,6 +2630,7 @@ index c0bb1a3ab..5b23c1881 100644
 +	History response exceeds the local size guard	历史记录超过本地资源限制
 +	Local history is unavailable in the web build	网页版无法使用本机历史记录
 +	Restore this draft	恢复此记录
++	Restoring changes inputs only and does not create a history entry. Save your draft first if needed.	恢复只切换输入内容，不新增历史记录。需要保留当前内容时，请先保存草稿。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

@@ -75,7 +75,7 @@ class HistoryTests(unittest.TestCase):
             self.assertFalse(worker.snapshot()['error']);self.assertEqual(worker.history.list()[0]['prompt'],'edit prompt')
             service.apply.assert_called_once()
 
-    def test_http_restore_saves_current_draft_and_keeps_authentication(self):
+    def test_http_restore_does_not_save_drafts_and_keeps_authentication(self):
         with tempfile.TemporaryDirectory() as directory:
             worker=NativeWorker(None);worker.history=History(directory)
             identifier=worker.history.save({'prompt':'original','references':[picture()]})
@@ -88,11 +88,29 @@ class HistoryTests(unittest.TestCase):
                 request=Request(url+'/history/restore',data=data,headers={'Authorization':'Bearer token','Content-Type':'application/json'})
                 with opener.open(request) as response:restored=json.load(response)
                 self.assertEqual(restored['prompt'],'original')
-                self.assertEqual(worker.history.list()[0]['prompt'],'current draft')
+                self.assertEqual(worker.history.list()[0]['prompt'],'original')
+                self.assertEqual(len(worker.history.list()),1)
+                with opener.open(request) as response:json.load(response)
+                self.assertEqual(len(worker.history.list()),1)
                 self.assertEqual(len(restored['references']),1)
                 with self.assertRaises(Exception) as raised:opener.open(Request(url+'/history/list',data=b'{}'))
                 self.assertEqual(raised.exception.code,401)
             finally:server.shutdown();server.server_close();thread.join()
 
+
+    def test_identical_snapshots_are_reused_without_extra_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            h=History(directory)
+            request={'prompt':'same','mode':'generate','references':[picture()]}
+            first=h.save(request)
+            self.assertEqual(h.save(request),first)
+            meta_path=Path(directory)/first/'snapshot.json'
+            meta=json.loads(meta_path.read_text(encoding='utf-8'));meta.pop('fingerprint')
+            meta_path.write_text(json.dumps(meta),encoding='utf-8')
+            self.assertEqual(History(directory).save(request),first)
+            self.assertEqual(len(h.list()),1)
+            self.assertEqual(len(list(Path(directory).iterdir())),1)
+            changed={**request,'prompt':'changed'}
+            self.assertNotEqual(h.save(changed),first)
 
 if __name__=='__main__':unittest.main()

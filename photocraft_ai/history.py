@@ -1,5 +1,8 @@
 """Local prompt/reference snapshots. No canvas commands and no remote requests."""
 import base64
+import hashlib
+from io import BytesIO
+from PIL import Image, ImageOps
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -12,6 +15,19 @@ from .references import save_references, validate_references, MAX_BYTES, MAX_TOT
 
 
 class History:
+    @staticmethod
+    def _fingerprint(prompt, mode, references):
+        digest=hashlib.sha256(json.dumps([prompt,mode],ensure_ascii=False).encode('utf-8'))
+        for item in references:
+            data=base64.b64decode(item['data'],validate=True)
+            with Image.open(BytesIO(data)) as image:
+                if image.width*image.height>100_000_000:
+                    raise ValueError('History reference exceeds the pixel guard')
+                upright=ImageOps.exif_transpose(image).convert('RGBA')
+                digest.update(json.dumps([item['name'],upright.size],ensure_ascii=False).encode('utf-8'))
+                digest.update(hashlib.sha256(upright.tobytes()).digest())
+        return digest.hexdigest()
+
     def __init__(self, root, max_entries=50, max_bytes=512*1024*1024):
         self.root = Path(root)
         self.max_entries, self.max_bytes = max_entries, max_bytes
@@ -63,6 +79,20 @@ class History:
             if not isinstance(prompt, str) or len(prompt)>4000 or mode not in ('fill','remove','generate'):
                 raise ValueError('Invalid history draft')
             references = validate_references(request.get('references', []))
+            fingerprint=self._fingerprint(prompt,mode,references)
+            for previous in self._records():
+                if (previous['prompt']!=prompt or previous['mode']!=mode
+                    or previous['names']!=[item['name'] for item in references]):
+                    continue
+                try:
+                    old=previous.get('fingerprint')
+                    if old is None:
+                        restored=self.restore(previous['id'])
+                        old=self._fingerprint(restored['prompt'],restored['mode'],restored['references'])
+                    if old==fingerprint:
+                        return previous['id']
+                except (OSError,ValueError,KeyError,TypeError):
+                    continue
             self.root.mkdir(parents=True, exist_ok=True)
             identifier = uuid.uuid4().hex
             folder = self._folder(identifier)
@@ -73,7 +103,7 @@ class History:
                 if size>MAX_TOTAL or any(p.stat().st_size>MAX_BYTES for p in paths):
                     raise ValueError('History references exceed local resource limits')
                 meta = {'id':identifier,'created':datetime.now(timezone.utc).isoformat(timespec='microseconds'),
-                        'prompt':prompt,'mode':mode,'names':names,'bytes':size}
+                        'prompt':prompt,'mode':mode,'names':names,'bytes':size,'fingerprint':fingerprint}
                 temporary = folder/'snapshot.tmp'
                 encoded=json.dumps(meta,ensure_ascii=False).encode('utf-8')
                 if len(encoded)>32768:
