@@ -1230,10 +1230,10 @@ index 1a43ffe77..7844e43e0 100644
          // (#5667): History reads the transform (or Place Embedded), then New Layer. Only for a
          // command that can run; a transform refused or still being applied keeps the box open and
 diff --git a/crates/ui-egui/src/app/frame.rs b/crates/ui-egui/src/app/frame.rs
-index 07ea17b7e..34747f0f1 100644
+index 07ea17b7e..d50c8dc08 100644
 --- a/crates/ui-egui/src/app/frame.rs
 +++ b/crates/ui-egui/src/app/frame.rs
-@@ -81,6 +81,7 @@ impl PhotocraftApp {
+@@ -81,10 +81,11 @@ impl PhotocraftApp {
          // Background jobs: apply finished ones, keep frames coming, Esc cancels (before the
          // shortcuts see Esc).
          if !screen_picker::tick(self, ctx) {
@@ -1241,6 +1241,11 @@ index 07ea17b7e..34747f0f1 100644
              jobs_ui::tick(self, ctx);
              #[cfg(not(target_arch = "wasm32"))]
              crate::dialogs::filter_preview_worker::discard_closed(self);
+-            if type_tool::in_ui_pass(ctx) {
++            if type_tool::in_ui_pass(ctx) && !crate::codex_ai::history_is_open(ctx) {
+                 if self.fonts_ready {
+                     shortcuts::handle(self, ctx);
+                 } else {
 @@ -113,7 +114,9 @@ impl PhotocraftApp {
          let dropped = ctx.input(|i| i.raw.dropped_files.clone());
          if !dropped.is_empty() {
@@ -1276,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..f1033fd88
+index 000000000..3ef2d925a
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,825 @@
+@@ -0,0 +1,855 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1289,6 +1294,7 @@ index 000000000..f1033fd88
 +use std::sync::{Arc, Mutex};
 +
 +use crate::{PhotocraftApp, canvas::ViewXform, theme::Tokens, widgets};
++mod history;
 +
 +const MAX_REFERENCE_BYTES: usize = 64 * 1024 * 1024;
 +const MAX_REFERENCE_TOTAL: usize = 256 * 1024 * 1024;
@@ -1313,6 +1319,11 @@ index 000000000..f1033fd88
 +    prompt_focused: bool,
 +    suppress_paste_release: bool,
 +    paste_command_seen: bool,
++    history_open: bool,
++    history_rows: Vec<Value>,
++    history_prompt: Option<String>,
++    history_notice: String,
++    current_prompt: String,
 +}
 +
 +type Shared = Arc<Mutex<Status>>;
@@ -1332,10 +1343,15 @@ index 000000000..f1033fd88
 +    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +    json!({"busy": state.busy, "message": state.message, "error": state.error,
 +           "referenceLoading":state.loading,"references":state.references.iter().map(|r|json!({"name":r.name,"bytes":r.bytes})).collect::<Vec<_>>(),
++           "historyOpen":state.history_open,"history":state.history_rows,"prompt":state.current_prompt,
 +           "maskFeatherMenu": crate::layer_menu_ui::inspect_feather_menu(ctx),
 +           "rect": state.rect.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "input": state.input.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "buttons": state.buttons.iter().map(|(label, r)| json!({"label": label, "rect": [r.min.x, r.min.y, r.width(), r.height()]})).collect::<Vec<_>>()})
++}
++
++pub(crate) fn history_is_open(ctx: &Context) -> bool {
++    shared(ctx).lock().unwrap_or_else(std::sync::PoisonError::into_inner).history_open
 +}
 +
 +/// Place below the selection; move above it at the bottom edge and clamp to the canvas.
@@ -1376,8 +1392,16 @@ index 000000000..f1033fd88
 +        state.input = None;
 +        state.buttons.clear();
 +        state.prompt_focused = false;
++        if let Some(prompt) = state.history_prompt.take() {
++            app.ui.codex_ai_prompt = prompt;
++        }
++        state.current_prompt = app.ui.codex_ai_prompt.clone();
 +    }
 +    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
++        return;
++    }
++    if history_is_open(ctx) {
++        history::show(app, ctx);
 +        return;
 +    }
 +    let Some(selection) = selection_rect(app, ctx, xf) else { return };
@@ -1409,16 +1433,19 @@ index 000000000..f1033fd88
 +                prompt_focused = input.has_focus();
 +                ui.label(l("Drop reference images here · Multiple images supported; limits checked by Codex"));
 +                button_rects = actions(app, ui, &snapshot);
-+                let paste = ui
-+                    .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
-+                    .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
-+                button_rects.push(("Paste reference image".into(), paste.rect));
-+                if paste.clicked() {
-+                    let result = paste_reference(app, ctx);
-+                    if let Err(error) = result {
-+                        reference_error(ctx, error);
++                ui.horizontal(|ui| {
++                    let paste = ui
++                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
++                        .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
++                    button_rects.push(("Paste reference image".into(), paste.rect));
++                    if paste.clicked() {
++                        let result = paste_reference(app, ctx);
++                        if let Err(error) = result {
++                            reference_error(ctx, error);
++                        }
 +                    }
-+                }
++                    history::buttons(app, ui, &snapshot, &mut button_rects);
++                });
 +                if !snapshot.references.is_empty() {
 +                    let mut remove = None;
 +                    egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
@@ -1464,6 +1491,9 @@ index 000000000..f1033fd88
 +    state.input = input_rect;
 +    state.buttons = button_rects;
 +    state.prompt_focused = prompt_focused;
++    state.current_prompt = app.ui.codex_ai_prompt.clone();
++    drop(state);
++    history::show(app, ctx);
 +}
 +
 +fn reference_error(ctx: &Context, error: String) {
@@ -1909,7 +1939,11 @@ index 000000000..f1033fd88
 +        );
 +        stream.write_all(wire.as_bytes()).map_err(|e| e.to_string())?;
 +        let mut response = String::new();
-+        stream.take(65536).read_to_string(&mut response).map_err(|e| e.to_string())?;
++        let limit = if path == "/history/restore" { 350 * 1024 * 1024 + 65536 } else { 65536 };
++        stream.take(limit + 1).read_to_string(&mut response).map_err(|e| e.to_string())?;
++        if response.len() as u64 > limit {
++            return Err(l("History response exceeds the local size guard"));
++        }
 +        let (_, body) = response.split_once("\r\n\r\n").ok_or(l("Invalid response from Codex service"))?;
 +        let value: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
 +        if value.get("error").and_then(Value::as_bool) == Some(true) && value.get("busy").is_none() {
@@ -1929,6 +1963,7 @@ index 000000000..f1033fd88
 +                status.busy = busy;
 +                status.message = response.get("message").and_then(Value::as_str).unwrap_or("Processing…").chars().take(1000).collect();
 +                status.error = response.get("error").and_then(Value::as_bool).unwrap_or(false);
++                status.history_notice = response.get("history_warning").and_then(Value::as_str).unwrap_or("").to_owned();
 +            }
 +            ctx.request_repaint();
 +            if !busy {
@@ -2105,6 +2140,167 @@ index 000000000..f1033fd88
 +        assert!(selection_rect(&app, &ctx, xf).is_none());
 +    }
 +}
+diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
+new file mode 100644
+index 000000000..5e9a0d7d7
+--- /dev/null
++++ b/crates/ui-egui/src/codex_ai/history.rs
+@@ -0,0 +1,155 @@
++use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
++#[cfg(not(target_arch = "wasm32"))]
++use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
++
++fn draft(app: &PhotocraftApp, state: &Status) -> Value {
++    json!({"prompt":app.ui.codex_ai_prompt,"mode":"generate",
++        "references":state.references.iter().map(|r|json!({"name":r.name,"data":r.data.as_str()})).collect::<Vec<_>>()})
++}
++
++pub(super) fn buttons(app: &PhotocraftApp, ui: &mut egui::Ui, state: &Status, buttons: &mut Vec<(String, Rect)>) {
++    for (label, path, enabled) in
++        [("History", "/history/list", true), ("Save draft", "/history/save", !app.ui.codex_ai_prompt.is_empty() || !state.references.is_empty())]
++    {
++        let b = ui.add_enabled(!state.busy && !state.loading && enabled, egui::Button::new(l(label)));
++        buttons.push((label.into(), b.rect));
++        if b.clicked() {
++            let shared = shared(ui.ctx());
++            shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner).history_open = true;
++            request(ui.ctx(), path, draft(app, state));
++        }
++    }
++}
++
++pub(super) fn show(app: &PhotocraftApp, ctx: &Context) {
++    let state = shared(ctx);
++    let snapshot = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
++    if !snapshot.history_open {
++        return;
++    }
++    let mut open = !ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
++    let mut restore = None;
++    let mut close = false;
++    let mut buttons = Vec::new();
++    egui::Window::new(l("Prompt and reference history")).id(egui::Id::unique("codex-history-window")).open(&mut open).default_width(600.0).show(ctx, |ui| {
++        ui.label(l("Restoring replaces the prompt and references only; the current draft is saved first."));
++        ui.label(l("Local history: up to 50 entries and 512 MiB. Older entries are removed automatically."));
++        if snapshot.loading {
++            ui.spinner();
++        }
++        if !snapshot.history_notice.is_empty() {
++            ui.label(&snapshot.history_notice);
++        }
++        if snapshot.history_rows.is_empty() {
++            ui.label(l("No saved history yet"));
++        }
++        egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
++            for row in &snapshot.history_rows {
++                ui.group(|ui| {
++                    ui.horizontal(|ui| {
++                        ui.label(row.get("display_time").and_then(Value::as_str).unwrap_or(""));
++                        let mode = match row.get("mode").and_then(Value::as_str) {
++                            Some("fill") => "Fill selection",
++                            Some("remove") => "Remove object",
++                            _ => "Generate image",
++                        };
++                        ui.label(l(mode));
++                        ui.label(format!("{}: {}", l("Reference images"), row.get("references").and_then(Value::as_u64).unwrap_or(0)));
++                    });
++                    ui.label(row.get("prompt").and_then(Value::as_str).unwrap_or(""));
++                    let b = ui.add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Restore this draft")));
++                    if let Some(id) = row.get("id").and_then(Value::as_str) {
++                        buttons.push((format!("Restore history {id}"), b.rect));
++                        if b.clicked() {
++                            restore = Some(id.to_owned());
++                        }
++                    }
++                });
++            }
++        });
++        let b = ui.button(l("Close"));
++        buttons.push(("Close history".into(), b.rect));
++        close = b.clicked();
++    });
++    if close {
++        open = false;
++    }
++    {
++        let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        s.history_open = open;
++        s.buttons.extend(buttons);
++    }
++    if let Some(id) = restore {
++        request(ctx, "/history/restore", json!({"id":id,"draft":draft(app,&snapshot)}));
++    }
++}
++
++#[cfg(target_arch = "wasm32")]
++fn request(ctx: &Context, _path: &'static str, _body: Value) {
++    super::reference_error(ctx, l("Local history is unavailable in the web build"));
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn request(ctx: &Context, path: &'static str, body: Value) {
++    let state = shared(ctx);
++    {
++        let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++        if s.busy || s.loading {
++            return;
++        }
++        s.loading = true;
++    }
++    let ctx = ctx.clone();
++    std::thread::spawn(move || {
++        let result = super::native::request("POST", path, &body).and_then(|value| {
++            let restored = if path == "/history/restore" {
++                use base64::Engine;
++                let prompt = value.get("prompt").and_then(Value::as_str).filter(|p| p.chars().count() <= 4000).ok_or("Invalid history prompt")?.to_owned();
++                let refs = value.get("references").and_then(Value::as_array).ok_or("Invalid history references")?;
++                let mut total = 0;
++                let mut files = Vec::new();
++                for item in refs {
++                    let name = item.get("name").and_then(Value::as_str).ok_or("Invalid history reference name")?;
++                    let data = item.get("data").and_then(Value::as_str).ok_or("Invalid history reference data")?;
++                    if data.len() > MAX_REFERENCE_BYTES.div_ceil(3) * 4 {
++                        return Err("History reference is too large".into());
++                    }
++                    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
++                    total += bytes.len();
++                    if total > MAX_REFERENCE_TOTAL {
++                        return Err("History references are too large".into());
++                    }
++                    files.push((name.to_owned(), bytes));
++                }
++                Some((prompt, super::read_references(crate::FileDialogAnswer::ContentsMany(files), &ctx, 0, 0)?))
++            } else {
++                None
++            };
++            Ok((value.get("entries").and_then(Value::as_array).cloned().unwrap_or_default(), restored))
++        });
++        {
++            let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++            s.loading = false;
++            match result {
++                Ok((rows, restored)) => {
++                    s.history_rows = rows;
++                    s.error = false;
++                    s.history_notice.clear();
++                    if let Some((prompt, refs)) = restored {
++                        s.history_prompt = Some(prompt);
++                        s.references = refs;
++                        s.message = l("History restored");
++                    } else if path == "/history/save" {
++                        s.message = l("Draft saved");
++                    }
++                }
++                Err(error) => {
++                    s.error = true;
++                    s.message = error.clone();
++                    s.history_notice = error;
++                }
++            }
++        }
++        ctx.request_repaint();
++    });
++}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
 index e979d3d82..526784f8e 100644
 --- a/crates/ui-egui/src/control.rs
@@ -2177,7 +2373,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..dd72783d2 100644
+index ef2788221..3f048b8b3 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2191,7 +2387,7 @@ index ef2788221..dd72783d2 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,101 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,113 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2293,11 +2489,23 @@ index ef2788221..dd72783d2 100644
 +	Clipboard image is invalid or too large	剪贴板图片无效或过大
 +	Clipboard image reading is unavailable	当前无法读取剪贴板图片
 +	No image in the clipboard	剪贴板中没有图片
++
++	Save draft	保存草稿
++	Prompt and reference history	提示词与参考图历史
++	Restoring replaces the prompt and references only; the current draft is saved first.	恢复仅替换提示词和参考图，会先保存当前草稿。
++	Local history: up to 50 entries and 512 MiB. Older entries are removed automatically.	本机保留最近 50 条，合计最多 512 MiB；超限自动清理旧记录。
++	No saved history yet	暂无历史记录
++	Reference images	参考图
++	History restored	已恢复历史提示词和参考图
++	Draft saved	草稿已保存
++	History response exceeds the local size guard	历史记录超过本地资源限制
++	Local history is unavailable in the web build	网页版无法使用本机历史记录
++	Restore this draft	恢复此记录
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..dd688d381 100644
+index c0bb1a3ab..5b23c1881 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,109 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,121 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2407,6 +2615,18 @@ index c0bb1a3ab..dd688d381 100644
 +	Clipboard image is invalid or too large	剪贴板图片无效或过大
 +	Clipboard image reading is unavailable	当前无法读取剪贴板图片
 +	No image in the clipboard	剪贴板中没有图片
++
++	Save draft	保存草稿
++	Prompt and reference history	提示词与参考图历史
++	Restoring replaces the prompt and references only; the current draft is saved first.	恢复仅替换提示词和参考图，会先保存当前草稿。
++	Local history: up to 50 entries and 512 MiB. Older entries are removed automatically.	本机保留最近 50 条，合计最多 512 MiB；超限自动清理旧记录。
++	No saved history yet	暂无历史记录
++	Reference images	参考图
++	History restored	已恢复历史提示词和参考图
++	Draft saved	草稿已保存
++	History response exceeds the local size guard	历史记录超过本地资源限制
++	Local history is unavailable in the web build	网页版无法使用本机历史记录
++	Restore this draft	恢复此记录
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

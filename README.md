@@ -13,6 +13,8 @@
 
 ![中文：长图切割](examples/usage/zh-hans/cutter.png)
 
+![中文：提示词与参考图历史](examples/usage/zh-hans/history.png)
+
 </details>
 
 <details>
@@ -21,6 +23,8 @@
 ![English: AI composer and references](examples/usage/en/references.png)
 
 ![English: long-image cutter](examples/usage/en/cutter.png)
+
+![English: prompt and reference history](examples/usage/en/history.png)
 
 </details>
 

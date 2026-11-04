@@ -15,6 +15,7 @@ from .backend import Cancelled
 from .service import Service
 from .references import validate_references
 from .localization import english
+from .history import History
 
 API_PORT = 17879
 EDITOR_PORT = 17880
@@ -26,6 +27,7 @@ class NativeWorker:
         self.lock = threading.Lock()
         self.cancel = threading.Event()
         self.state = {'busy': False, 'message': '就绪', 'error': False, 'job': None}
+        self.history = History(RUNTIME / 'native-history')
 
     def snapshot(self):
         with self.lock:
@@ -70,6 +72,10 @@ class NativeWorker:
                 prepared = service.prepare(mode, prompt,
                                            feather_px=0 if mode == 'generate' else 12,
                                            references=request.get('references', []))
+            try:
+                self.history.save(request)
+            except Exception as error:
+                self.update(history_warning=str(error))
             self.update(job=str(prepared.job))
             result = service.generate(prepared, self.cancel, lambda text: self.update(message=text))
             if self.cancel.is_set():
@@ -128,7 +134,23 @@ def handler(worker: NativeWorker, token: str):
                 request = json.loads(self.rfile.read(length) or b'{}')
                 if not isinstance(request, dict):
                     raise ValueError('请求必须是对象')
-                if self.path == '/generate':
+                if self.path == '/history/list':
+                    self.respond(200, {'entries':worker.history.list()})
+                    return
+                elif self.path == '/history/save':
+                    worker.history.save(request)
+                    self.respond(200, {'entries':worker.history.list()})
+                    return
+                elif self.path == '/history/restore':
+                    restored=worker.history.restore(request.get('id'))
+                    draft=request.get('draft')
+                    if draft is not None and not isinstance(draft,dict):
+                        raise ValueError('Invalid history draft')
+                    if draft and (draft.get('prompt') or draft.get('references')):
+                        worker.history.save(draft)
+                    self.respond(200, {**restored, 'entries':worker.history.list()})
+                    return
+                elif self.path == '/generate':
                     worker.submit(request)
                 elif self.path == '/cancel':
                     worker.cancel.set()
@@ -136,7 +158,7 @@ def handler(worker: NativeWorker, token: str):
                     self.respond(404, {'message': '未知操作', 'error': True})
                     return
                 self.respond(202, worker.snapshot())
-            except (ValueError, TypeError) as error:
+            except (ValueError, TypeError, OSError, KeyError) as error:
                 self.respond(400, {'message': str(error), 'error': True})
     return Handler
 

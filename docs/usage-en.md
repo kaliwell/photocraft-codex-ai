@@ -34,3 +34,13 @@ The **Copy image** button at the top of the first screenshot copies the full vis
 Choose **Edit → Preferences → Interface → Language**, select English or Chinese, then apply. The AI composer and cutter follow the setting; prompts and filenames retain their original text.
 
 The geometric demo artwork was made for this project. Screenshots contain no user photos, account details or job history.
+
+## 5. Prompt and reference history
+
+![English: prompt and reference history](../examples/usage/en/history.png)
+
+- From this update onward, successfully prepared generation tasks save their prompt, operation and references automatically. Click **Save draft** to keep inputs before generating.
+- Open **History** and choose **Restore this draft**. The current unsent draft is saved first; the selected prompt and ordered reference images replace the composer inputs. Close the history window to continue editing or generate again.
+- Restoring does not change the canvas, selection or layers, and does not trigger generation.
+- Records persist under `runtime/native-history/` across restarts. Up to 50 entries and 512 MiB are retained, with oldest entries removed when over budget. Older job directories are not imported automatically.
+- Prompts and reference snapshots remain local. References are sent only when you submit a new generation request.
