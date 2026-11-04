@@ -1,5 +1,7 @@
 # Unreleased / 统一开发版新增
 
+- Project-scoped storage: history and cutter JSON live beside each saved project under `<filename>.photocraft-data/`. See [path rules](docs/project-data.md).
+
 - 提示词与参考图历史：自动记录生成输入、保存草稿、恢复不新增记录，相同内容去重；仅恢复输入区，跨重启保留，最近 50 条且合计最多 512 MiB。
 - 剪贴板参考图：按钮或提示词中 Ctrl+V 追加图片，兼容 Windows DIB/DIBV5，保留文字与画布粘贴。
 - Prompt/reference history with draft saving and restore, read-only rollback and duplicate snapshot reuse; local persistence with 50-entry / 512 MiB retention. Clipboard references support Windows DIB/DIBV5 while preserving text/canvas paste.

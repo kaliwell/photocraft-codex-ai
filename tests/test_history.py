@@ -70,6 +70,7 @@ class HistoryTests(unittest.TestCase):
             service.bridge._revision.return_value=1
             service.prepare.return_value=SimpleNamespace(job=Path(directory)/'job')
             worker=NativeWorker(service);worker.history=History(Path(directory)/'history')
+            worker.history_for=Mock(return_value=worker.history)
             request={'mode':'fill','prompt':'edit prompt','document':{'index':0,'name':'Demo','revision':1},'references':[picture()]}
             worker._run(request)
             self.assertFalse(worker.snapshot()['error']);self.assertEqual(worker.history.list()[0]['prompt'],'edit prompt')
@@ -112,5 +113,21 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(len(list(Path(directory).iterdir())),1)
             changed={**request,'prompt':'changed'}
             self.assertNotEqual(h.save(changed),first)
+
+    def test_project_history_uses_editor_paths_and_isolates_projects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service=Mock();worker=NativeWorker(service)
+            first=str(Path(directory)/'one.pcraft');second=str(Path(directory)/'two.pcraft')
+            def active(path):
+                service.bridge.client.run.return_value={'active':0,'documents':[{'index':0,'name':'Demo','path':path}]}
+            request={'document':{'index':0,'name':'Demo'}}
+            active(first);a=worker.history_for(request);a.save({'prompt':'project one'})
+            self.assertEqual(a.root,Path(first+'.photocraft-data')/'history')
+            active(second);self.assertEqual(worker.history_for(request).list(),[])
+            active(first);self.assertEqual(worker.history_for(request).list()[0]['prompt'],'project one')
+            active(None)
+            with self.assertRaises(ValueError):worker.history_for(request)
+            active(second)
+            with self.assertRaises(ValueError):worker.history_for({'document':{'index':0,'name':'Demo','path':first}})
 
 if __name__=='__main__':unittest.main()

@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+[工程数据路径规则 / Project data paths](docs/project-data.md)：历史和切图方案按工程分别保存在同目录的 `.photocraft-data` 文件夹。
+
 **原生选区 AI 工具栏 / Native selection AI toolbar**
 
 [中文](#中文说明) · [English](#english) · [下载 / Download v0.4.0](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.4.0)

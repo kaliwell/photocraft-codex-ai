@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..24d810622
+index 000000000..51357c71d
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,851 @@
+@@ -0,0 +1,864 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1320,8 +1320,10 @@ index 000000000..24d810622
 +    suppress_paste_release: bool,
 +    paste_command_seen: bool,
 +    history_open: bool,
++    history_context: Value,
 +    history_rows: Vec<Value>,
 +    history_prompt: Option<String>,
++    history_references: Option<Vec<Reference>>,
 +    history_notice: String,
 +    current_prompt: String,
 +}
@@ -1392,8 +1394,19 @@ index 000000000..24d810622
 +        state.input = None;
 +        state.buttons.clear();
 +        state.prompt_focused = false;
++        let context = history::document_context(app);
++        if state.history_context != context {
++            state.history_context = context;
++            state.history_rows.clear();
++            state.history_open = false;
++            state.history_prompt = None;
++            state.history_references = None;
++        }
 +        if let Some(prompt) = state.history_prompt.take() {
 +            app.ui.codex_ai_prompt = prompt;
++            if let Some(references) = state.history_references.take() {
++                state.references = references;
++            }
 +        }
 +        state.current_prompt = app.ui.codex_ai_prompt.clone();
 +    }
@@ -2138,16 +2151,19 @@ index 000000000..24d810622
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..cee30a45b
+index 000000000..e9a16cdc8
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,168 @@
 +use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
 +#[cfg(not(target_arch = "wasm32"))]
 +use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
 +
++pub(super) fn document_context(app: &PhotocraftApp) -> Value {
++    app.session.active().map(|d| json!({"index":app.session.active_index(),"name":d.doc.name,"id":d.doc.id,"path":d.path})).unwrap_or(Value::Null)
++}
 +fn draft(app: &PhotocraftApp, state: &Status) -> Value {
-+    json!({"prompt":app.ui.codex_ai_prompt,"mode":"generate",
++    json!({"prompt":app.ui.codex_ai_prompt,"mode":"generate","document":document_context(app),
 +        "references":state.references.iter().map(|r|json!({"name":r.name,"data":r.data.as_str()})).collect::<Vec<_>>()})
 +}
 +
@@ -2165,7 +2181,7 @@ index 000000000..cee30a45b
 +    }
 +}
 +
-+pub(super) fn show(_app: &PhotocraftApp, ctx: &Context) {
++pub(super) fn show(app: &PhotocraftApp, ctx: &Context) {
 +    let state = shared(ctx);
 +    let snapshot = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
 +    if !snapshot.history_open {
@@ -2175,7 +2191,7 @@ index 000000000..cee30a45b
 +    let mut restore = None;
 +    let mut close = false;
 +    let mut buttons = Vec::new();
-+    egui::Window::new(l("Prompt and reference history"))
++    egui::Window::new(format!("{} ? {}", l("Prompt and reference history"), app.session.active().map(|d| d.doc.name.as_str()).unwrap_or("")))
 +        .id(egui::Id::unique("codex-history-window-side"))
 +        .open(&mut open)
 +        .order(egui::Order::Foreground)
@@ -2188,7 +2204,7 @@ index 000000000..cee30a45b
 +                ui.spinner();
 +            }
 +            if !snapshot.history_notice.is_empty() {
-+                ui.label(&snapshot.history_notice);
++                ui.label(l(&snapshot.history_notice));
 +            }
 +            if snapshot.history_rows.is_empty() {
 +                ui.label(l("No saved history yet"));
@@ -2230,7 +2246,7 @@ index 000000000..cee30a45b
 +        s.buttons.extend(buttons);
 +    }
 +    if let Some(id) = restore {
-+        request(ctx, "/history/restore", json!({"id":id}));
++        request(ctx, "/history/restore", json!({"id":id,"document":draft(app,&snapshot)["document"]}));
 +    }
 +}
 +
@@ -2280,6 +2296,10 @@ index 000000000..cee30a45b
 +        {
 +            let mut s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +            s.loading = false;
++            if s.history_context != body["document"] {
++                ctx.request_repaint();
++                return;
++            }
 +            match result {
 +                Ok((rows, restored)) => {
 +                    s.history_rows = rows;
@@ -2287,7 +2307,7 @@ index 000000000..cee30a45b
 +                    s.history_notice.clear();
 +                    if let Some((prompt, refs)) = restored {
 +                        s.history_prompt = Some(prompt);
-+                        s.references = refs;
++                        s.history_references = Some(refs);
 +                        s.message = l("History restored");
 +                    } else if path == "/history/save" {
 +                        s.message = l("Draft saved");
@@ -2375,7 +2395,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..9350b1e16 100644
+index ef2788221..a11ff8b80 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2389,7 +2409,7 @@ index ef2788221..9350b1e16 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,114 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,117 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2504,11 +2524,14 @@ index ef2788221..9350b1e16 100644
 +	Local history is unavailable in the web build	网页版无法使用本机历史记录
 +	Restore this draft	恢复此记录
 +	Restoring changes inputs only and does not create a history entry. Save your draft first if needed.	恢复只切换输入内容，不新增历史记录。需要保留当前内容时，请先保存草稿。
++	Save the project first to store history beside the project file	请先保存工程，历史记录将保存在工程同目录
++	The active project changed; reopen history	当前工程已改变，请重新打开历史
++	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..cd4c4dc37 100644
+index c0bb1a3ab..8efc4bf6b 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,122 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,125 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2631,6 +2654,9 @@ index c0bb1a3ab..cd4c4dc37 100644
 +	Local history is unavailable in the web build	网页版无法使用本机历史记录
 +	Restore this draft	恢复此记录
 +	Restoring changes inputs only and does not create a history entry. Save your draft first if needed.	恢复只切换输入内容，不新增历史记录。需要保留当前内容时，请先保存草稿。
++	Save the project first to store history beside the project file	请先保存工程，历史记录将保存在工程同目录
++	The active project changed; reopen history	当前工程已改变，请重新打开历史
++	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -2667,10 +2693,10 @@ index 8165b8a41..6e9648be5 100644
      /// Where each document was last saved or exported to through a dialog (#1826): its next Save
 diff --git a/crates/ui-egui/src/long_cut.rs b/crates/ui-egui/src/long_cut.rs
 new file mode 100644
-index 000000000..12e197305
+index 000000000..f1dfd3ebc
 --- /dev/null
 +++ b/crates/ui-egui/src/long_cut.rs
-@@ -0,0 +1,566 @@
+@@ -0,0 +1,590 @@
 +//! Independently implemented long-image cutter. No LongPicCutter source is included.
 +use crate::plugin_i18n::text as l;
 +macro_rules! pt { ($($arg:tt)*) => { crate::plugin_i18n::text(&format!($($arg)*)) }; }
@@ -2734,6 +2760,7 @@ index 000000000..12e197305
 +    drag: Option<usize>,
 +    drag_before: Vec<u32>,
 +    cache: Option<std::path::PathBuf>,
++    document: photocraft_doc::DocId,
 +    message: String,
 +    confirm_clear: bool,
 +    confirm_import: Option<Plan>,
@@ -2742,11 +2769,14 @@ index 000000000..12e197305
 +    maximized: bool,
 +}
 +
-+fn cache_path(width: u32, height: u32, pixels: &[u8]) -> Option<std::path::PathBuf> {
-+    use std::hash::{Hash, Hasher};
-+    let mut h = std::collections::hash_map::DefaultHasher::new();
-+    (width, height, pixels).hash(&mut h);
-+    std::env::var_os("PHOTOCRAFT_CONFIG_DIR").map(|p| std::path::PathBuf::from(p).join("long-cut").join(pt!("{:016x}.json", h.finish())))
++fn cache_path(app: &PhotocraftApp) -> Option<std::path::PathBuf> {
++    let document = app.session.active()?;
++    let path = std::path::Path::new(document.path.as_deref()?);
++    if !path.is_absolute() {
++        return None;
++    }
++    let name = path.file_name()?.to_string_lossy();
++    Some(path.with_file_name(format!("{name}.photocraft-data")).join("cutting").join("plan.json"))
 +}
 +
 +pub fn open(app: &mut PhotocraftApp) -> Result<Value, String> {
@@ -2760,7 +2790,7 @@ index 000000000..12e197305
 +    let (width, height) = (clip.bounds.width(), clip.bounds.height());
 +    let mut pixels = vec![0; width as usize * height as usize * 4];
 +    clip.surface.read_rgba8_into(clip.bounds, pixels.as_chunks_mut::<4>().0);
-+    let cache = cache_path(width, height, &pixels);
++    let cache = cache_path(app);
 +    let mut plan = Plan { version: 1, width, height, cuts: vec![] };
 +    if let Some(path) = &cache
 +        && std::fs::metadata(path).is_ok_and(|m| m.len() <= 65536)
@@ -2773,6 +2803,7 @@ index 000000000..12e197305
 +    }
 +    app.long_cut = Some(State {
 +        plan,
++        document: app.session.active().ok_or("No document")?.doc.id,
 +        pixels: Arc::new(pixels),
 +        texture: None,
 +        undo: vec![],
@@ -2844,6 +2875,14 @@ index 000000000..12e197305
 +
 +pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
 +    let Some(mut state) = app.long_cut.take() else { return };
++    if app.session.active().is_none_or(|d| d.doc.id != state.document) {
++        return;
++    }
++    let cache = cache_path(app);
++    if state.cache != cache {
++        state.cache = cache;
++        state.persist();
++    }
 +    let mut opened = true;
 +    let mut action = "";
 +    let mut ready = None;
@@ -2931,6 +2970,9 @@ index 000000000..12e197305
 +                    state.confirm_import = None;
 +                }
 +            });
++        }
++        if state.cache.is_none() {
++            ui.label(l("Save the project to keep its cutting plan beside the project file"));
 +        }
 +        ui.label(pt!("{} × {} px · Slices: {} · {}", state.plan.width, state.plan.height, state.plan.cuts.len() + 1, state.message));
 +        if state.export.is_some() {
@@ -3034,7 +3076,15 @@ index 000000000..12e197305
 +            Ok(Value::Null)
 +        })
 +    } else if let Some(bytes) = plan_bytes {
-+        bytes.and_then(|b| save(app, "cut-plan.json", b))
++        bytes.and_then(|b| {
++            if let Some(path) = cache_path(app).and_then(|p| p.parent().map(|d| d.join("longpiccutter.json"))) {
++                std::fs::create_dir_all(path.parent().ok_or("No project directory")?).map_err(|e| e.to_string())?;
++                std::fs::write(&path, b).map_err(|e| e.to_string())?;
++                Ok(json!({"saved":path}))
++            } else {
++                save(app, "cut-plan.json", b)
++            }
++        })
 +    } else if let Some(bytes) = ready {
 +        bytes.and_then(|b| save(app, "slices.zip", b))
 +    } else {

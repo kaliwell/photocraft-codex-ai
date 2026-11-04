@@ -42,5 +42,7 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 - From this update onward, successfully prepared generation tasks save their prompt, operation and references automatically. Click **Save draft** to keep inputs before generating.
 - Open **History** and choose **Restore this draft**. The selected prompt and ordered reference images replace the composer inputs without creating a record. The composer remains visible and editable. Use Save draft first if you want to keep your current inputs.
 - Restoring does not change the canvas, selection or layers, and does not trigger generation.
-- Records persist under `runtime/native-history/` across restarts. Up to 50 entries and 512 MiB are retained, with oldest entries removed when over budget. Older job directories are not imported automatically.
+- Records persist under `<full-project-filename>.photocraft-data/history/` across restarts. Per project, up to 50 entries and 512 MiB are retained, with oldest entries removed when over budget. Older job directories are not imported automatically.
 - Prompts and reference snapshots remain local. References are sent only when you submit a new generation request.
+
+[Project data path rules](project-data.md)

@@ -28,6 +28,31 @@ class NativeWorker:
         self.cancel = threading.Event()
         self.state = {'busy': False, 'message': '就绪', 'error': False, 'job': None}
         self.history = History(RUNTIME / 'native-history')
+        self.project_histories = {}
+
+    def history_for(self, request):
+        if self.service is None:
+            return self.history
+        session=self.service.bridge.client.run('session.inspect')
+        expected=request.get('document', {})
+        active=session.get('active')
+        document=next((d for d in session.get('documents',[]) if d.get('index')==active),None)
+        if not document or (document.get('index'),document.get('name')) != (expected.get('index'),expected.get('name')):
+            raise ValueError('The active project changed; reopen history')
+        if 'path' in expected and expected['path'] != document.get('path'):
+            raise ValueError('The active project changed; reopen history')
+        path=document.get('path')
+        if not path:
+            raise ValueError('Save the project first to store history beside the project file')
+        project=Path(path)
+        if not project.is_absolute():
+            raise ValueError('The project path must be absolute')
+        folder=project.with_name(project.name+'.photocraft-data')/'history'
+        key=str(folder)
+        with self.lock:
+            if key not in self.project_histories:
+                self.project_histories[key]=History(folder)
+            return self.project_histories[key]
 
     def snapshot(self):
         with self.lock:
@@ -73,7 +98,7 @@ class NativeWorker:
                                            feather_px=0 if mode == 'generate' else 12,
                                            references=request.get('references', []))
             try:
-                self.history.save(request)
+                self.history_for(request).save(request)
             except Exception as error:
                 self.update(history_warning=str(error))
             self.update(job=str(prepared.job))
@@ -135,15 +160,17 @@ def handler(worker: NativeWorker, token: str):
                 if not isinstance(request, dict):
                     raise ValueError('请求必须是对象')
                 if self.path == '/history/list':
-                    self.respond(200, {'entries':worker.history.list()})
+                    self.respond(200, {'entries':worker.history_for(request).list()})
                     return
                 elif self.path == '/history/save':
-                    worker.history.save(request)
-                    self.respond(200, {'entries':worker.history.list()})
+                    history=worker.history_for(request)
+                    history.save(request)
+                    self.respond(200, {'entries':history.list()})
                     return
                 elif self.path == '/history/restore':
-                    restored=worker.history.restore(request.get('id'))
-                    self.respond(200, {**restored, 'entries':worker.history.list()})
+                    history=worker.history_for(request)
+                    restored=history.restore(request.get('id'))
+                    self.respond(200, {**restored, 'entries':history.list()})
                     return
                 elif self.path == '/generate':
                     worker.submit(request)
