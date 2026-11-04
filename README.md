@@ -4,7 +4,25 @@
 
 [中文](#中文说明) · [English](#english) · [下载 / Download v0.4.0](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.4.0)
 
-![PhotoCraft 原生 AI 工具栏 / Native AI toolbar](examples/native-toolbar-final.png)
+[中文功能使用图](docs/usage-zh.md) · [English illustrated guide](docs/usage-en.md)
+
+<details open>
+<summary>中文界面使用图</summary>
+
+![中文：AI 工具栏与参考图](examples/usage/zh-hans/references.png)
+
+![中文：长图切割](examples/usage/zh-hans/cutter.png)
+
+</details>
+
+<details>
+<summary>English interface screenshots</summary>
+
+![English: AI composer and references](examples/usage/en/references.png)
+
+![English: long-image cutter](examples/usage/en/cutter.png)
+
+</details>
 
 ## 中文说明
 
