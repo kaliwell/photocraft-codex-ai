@@ -1,4 +1,4 @@
-# 工程数据路径 / Project data paths
+# 工程数据路径
 
 已保存的工程使用同目录的专属文件夹。保留工程完整文件名和扩展名，再追加 `.photocraft-data`，避免同名 PSD、PNG、PCraft 混用记录。
 
@@ -23,16 +23,3 @@
 - 另存为：新路径使用新数据目录，旧历史仍属于旧工程，不自动复制。若切图窗口保持打开，当前切割线会随另存为写入新工程目录。
 - 移动整个工程：将工程文件与旁边的数据文件夹一起复制。手动改工程文件名时，也将数据文件夹改为相同的新完整文件名加 `.photocraft-data`。
 - 旧版 `runtime/native-history/` 和配置目录 `long-cut/` 保留原处，不自动混入工程目录，避免把来源不明的记录归给错误工程。
-
-## English
-
-Saved projects use `<full-project-filename>.photocraft-data/` beside the project file. Keeping the extension separates similarly named PSD, PNG and PCraft projects.
-
-- `history/<id>/snapshot.json` and `references/` hold prompt/reference snapshots. Retention is **per project**: 50 entries / 512 MiB. Restore is read-only and identical snapshots are reused.
-- `cutting/plan.json` automatically persists cut lines. Identical canvases in different projects remain isolated; incompatible canvas sizes do not reuse a plan.
-- **Export plan** writes `cutting/longpiccutter.json`. PNG ZIP export still asks for its destination.
-- Save an untitled project before storing history. Unsaved cutting plans remain in the current window; manual JSON export is available.
-- Switching documents changes history scope and discards stale asynchronous history responses. Reopen the cutter to load that project's plan.
-- Save As starts a new history scope, retaining the old project's history. An open cutter carries its current lines into the new project's data directory.
-- Move the project file and its adjacent data directory together. When renaming the project manually, rename its data directory to match.
-- Legacy global history and cutter caches remain untouched; they are not automatically assigned to a project.

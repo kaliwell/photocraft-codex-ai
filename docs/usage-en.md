@@ -1,6 +1,6 @@
 # Unified build: illustrated guide
 
-[中文指南](usage-zh.md) · [Back to README](../README.md)
+[中文指南](usage-zh.md) · [Back to README](../README.en.md)
 
 These screenshots show the unified development build on PhotoCraft 0.20.1 (merge commit `d421251`). The published v0.4.0 ZIP predates the cutter, canvas clipboard export and shared language support in this merge. The full feature set below does not describe that older package.
 
@@ -22,7 +22,7 @@ This screenshot demonstrates inputs and attachments. No remote generation was ru
 
 1. Click **Long image cutter** in the title bar to capture the current complete canvas.
 2. Click the image or press `S` to add a cut. Drag red lines to adjust them; `Delete` removes the selected line and `Ctrl+Z` undoes a change.
-3. Maximize the window or scroll through the source. Choose **Export PNG ZIP** to save the slices.
+3. **Fit full image** is enabled by default to show the complete long image at its original aspect ratio. Uncheck it to enlarge details. Maximize the window or scroll through the source. Choose **Export PNG ZIP** to save the slices.
 4. Import/export JSON plans to reuse cuts or exchange data with LongPicCutter.
 
 ## 3. Copy the full canvas
@@ -45,4 +45,4 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 - Records persist under `<full-project-filename>.photocraft-data/history/` across restarts. Per project, up to 50 entries and 512 MiB are retained, with oldest entries removed when over budget. Older job directories are not imported automatically.
 - Prompts and reference snapshots remain local. References are sent only when you submit a new generation request.
 
-[Project data path rules](project-data.md)
+[Project data path rules](project-data-en.md)

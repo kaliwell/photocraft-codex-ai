@@ -5,7 +5,7 @@ import zipfile
 root = Path(__file__).resolve().parent
 destination = root / 'dist/photocraft-codex-ai-0.4.0.zip'
 destination.parent.mkdir(exist_ok=True)
-files = [root / name for name in ('README.md', 'VALIDATION.md', 'THIRD_PARTY.md', 'RELEASE_NOTES.md',
+files = [root / name for name in ('README.md', 'README.en.md', 'VALIDATION.md', 'THIRD_PARTY.md', 'RELEASE_NOTES.md',
                                  'requirements.txt', 'start.cmd', 'start-native.cmd', 'start-panel.cmd',
                                  'native-build.toml', 'build_native.py', 'export_native_patch.py', 'build_release.py')]
 for folder in ('photocraft_ai', 'vendor', 'tests', 'examples', 'native-source'):

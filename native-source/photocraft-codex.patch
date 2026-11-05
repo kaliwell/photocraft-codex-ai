@@ -2395,7 +2395,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..a11ff8b80 100644
+index ef2788221..13b23b811 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2409,7 +2409,7 @@ index ef2788221..a11ff8b80 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,117 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,118 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2527,11 +2527,12 @@ index ef2788221..a11ff8b80 100644
 +	Save the project first to store history beside the project file	请先保存工程，历史记录将保存在工程同目录
 +	The active project changed; reopen history	当前工程已改变，请重新打开历史
 +	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
++	Fit full image	完整显示图片
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..8efc4bf6b 100644
+index c0bb1a3ab..faf56cd00 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,125 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,126 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2657,6 +2658,7 @@ index c0bb1a3ab..8efc4bf6b 100644
 +	Save the project first to store history beside the project file	请先保存工程，历史记录将保存在工程同目录
 +	The active project changed; reopen history	当前工程已改变，请重新打开历史
 +	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
++	Fit full image	完整显示图片
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -2693,10 +2695,10 @@ index 8165b8a41..6e9648be5 100644
      /// Where each document was last saved or exported to through a dialog (#1826): its next Save
 diff --git a/crates/ui-egui/src/long_cut.rs b/crates/ui-egui/src/long_cut.rs
 new file mode 100644
-index 000000000..f1dfd3ebc
+index 000000000..ba1715a80
 --- /dev/null
 +++ b/crates/ui-egui/src/long_cut.rs
-@@ -0,0 +1,590 @@
+@@ -0,0 +1,599 @@
 +//! Independently implemented long-image cutter. No LongPicCutter source is included.
 +use crate::plugin_i18n::text as l;
 +macro_rules! pt { ($($arg:tt)*) => { crate::plugin_i18n::text(&format!($($arg)*)) }; }
@@ -2767,6 +2769,7 @@ index 000000000..f1dfd3ebc
 +    export: Option<mpsc::Receiver<Result<Vec<u8>, String>>>,
 +    source_rect: Option<egui::Rect>,
 +    maximized: bool,
++    fit_image: bool,
 +}
 +
 +fn cache_path(app: &PhotocraftApp) -> Option<std::path::PathBuf> {
@@ -2817,6 +2820,7 @@ index 000000000..f1dfd3ebc
 +        export: None,
 +        source_rect: None,
 +        maximized: false,
++        fit_image: true,
 +    });
 +    Ok(json!({"width":width,"height":height,"open":true}))
 +}
@@ -2980,11 +2984,18 @@ index 000000000..f1dfd3ebc
 +            ui.label(l("Encoding slices…"));
 +        }
 +        let texture = state.texture(ctx).id();
-+        let width = (ui.available_width() - 18.0).max(100.0);
++        ui.checkbox(&mut state.fit_image, l("Fit full image"));
++        let available_width = (ui.available_width() - 18.0).max(100.0);
 +        let viewport_height = (ui.available_height() - 8.0).max(100.0);
++        let width = if state.fit_image { available_width.min(viewport_height * state.plan.width as f32 / state.plan.height as f32) } else { available_width };
 +        let height = width * state.plan.height as f32 / state.plan.width as f32;
 +        egui::ScrollArea::both().id_salt("long-cut-source").max_height(viewport_height).show(ui, |ui| {
-+            let response = ui.add(egui::Image::new((texture, egui::vec2(width, height))).sense(egui::Sense::click_and_drag()));
++            let response = ui
++                .horizontal(|ui| {
++                    ui.add_space(((available_width - width) / 2.0).max(0.0));
++                    ui.add(egui::Image::new((texture, egui::vec2(width, height))).sense(egui::Sense::click_and_drag()))
++                })
++                .inner;
 +            let rect = response.rect;
 +            state.source_rect = Some(rect);
 +            let position = ctx.pointer_hover_pos().filter(|p| rect.contains(*p) && ui.clip_rect().contains(*p));
