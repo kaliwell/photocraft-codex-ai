@@ -275,3 +275,7 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - Visual output reviewed. Exact image-difference bounds for both edits stay inside their selections, verifying unchanged pixels outside those regions.
 - Chinese native UI captures actual remote runs. English UI replays recorded outputs through the same local apply pipeline; this is disclosed on each page. Waiting is condensed rather than presented as generation latency.
 - Separate GIFs for all three primary features in both languages; no personal artwork included. Documentation/media only.
+
+## Batch reference PSD conversion (2026-11-06)
+
+81 Python tests pass, including per-file isolation, failure continuation, cancellation retaining files and durable reports. Native batch button with two references creates two separate grouped PSDs. Actual five user JPGs processed sequentially into five named PSDs; all reopen at 1500x2000 with editable Type/Shape layers and bounded major groups. Original JPG hashes unchanged. Results remain in a new subfolder of the user-specified source folder; no user assets published. Desktop/clippy/wasm/layers pass. Batch polling scales with reference count and progress controls remain visible while processing new documents.

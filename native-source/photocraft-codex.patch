@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..41f7b3f88
+index 000000000..ceef0728a
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,850 @@
+@@ -0,0 +1,855 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1425,7 +1425,7 @@ index 000000000..41f7b3f88
 +        return;
 +    }
 +    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-+    let Some(selection) = selection_rect(app, ctx, xf) else {
++    let Some(selection) = selection_rect(app, ctx, xf).or_else(|| snapshot.busy.then(|| Rect::from_center_size(xf.rect.center(), vec2(1.0, 1.0)))) else {
 +        history::show(app, ctx);
 +        layout_options::show(app, ctx);
 +        return;
@@ -1634,7 +1634,7 @@ index 000000000..41f7b3f88
 +    drop(state);
 +    let mut request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,"references":references,
 +        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision,"insertionLayer":doc.active_layer.map(|layer|layer.0)}});
-+    if mode == "layout" || mode == "detail" {
++    if mode == "layout" || mode == "detail" || mode == "batch" {
 +        request["layout_options"] = layout_options::value(app);
 +    }
 +    start(ctx, request);
@@ -1948,6 +1948,11 @@ index 000000000..41f7b3f88
 +    }
 +
 +    pub(super) fn run(ctx: &Context, state: &Shared, body: Value) -> Result<(), String> {
++        let timeout = if body.get("mode").and_then(Value::as_str) == Some("batch") {
++            body.get("references").and_then(Value::as_array).map_or(1200, |items| (items.len() as u64).saturating_mul(660).saturating_add(1200))
++        } else {
++            1200
++        };
 +        request("POST", "/generate", &body)?;
 +        let started = Instant::now();
 +        loop {
@@ -1964,7 +1969,7 @@ index 000000000..41f7b3f88
 +            if !busy {
 +                return Ok(());
 +            }
-+            if started.elapsed() > Duration::from_secs(1200) {
++            if started.elapsed() > Duration::from_secs(timeout) {
 +                return Err(l("Generation timed out; check the local job logs"));
 +            }
 +            std::thread::sleep(Duration::from_millis(500));
@@ -2137,10 +2142,10 @@ index 000000000..41f7b3f88
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..a74f1a247
+index 000000000..577c1e14c
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,176 @@
 +use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
 +#[cfg(not(target_arch = "wasm32"))]
 +use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
@@ -2205,6 +2210,7 @@ index 000000000..a74f1a247
 +                                Some("remove") => "Remove object",
 +                                Some("layout") => "Reference to PSD",
 +                                Some("detail") => "Detail page base",
++                                Some("batch") => "Batch references to PSD",
 +                                _ => "Generate image",
 +                            };
 +                            ui.label(l(mode));
@@ -2454,10 +2460,10 @@ index 000000000..e99ef0d4b
 +}
 diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
 new file mode 100644
-index 000000000..da4bc502e
+index 000000000..0cb949151
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/sidebar.rs
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,90 @@
 +//! Canvas-side tools drawer; keeps the selection composer compact.
 +use super::{Context, PhotocraftApp, Rect, Status, history, l, layout_options, paste_reference, pick_references, reference_error, shared, submit, vec2};
 +pub(super) fn controls(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui) -> Vec<(String, Rect)> {
@@ -2479,6 +2485,12 @@ index 000000000..da4bc502e
 +            }
 +        }
 +    });
++    let batch = ui.add_enabled(!snapshot.busy && !snapshot.loading && !snapshot.references.is_empty(), egui::Button::new(l("Batch references to PSD")));
++    buttons.push(("Batch references to PSD".into(), batch.rect));
++    if batch.clicked() {
++        submit(app, ctx, "batch");
++    }
++    ui.label(l("Batch converts each reference into a separate new PSD. Completed files are kept if cancelled."));
 +    buttons
 +}
 +
@@ -2614,7 +2626,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..60cd2d6f8 100644
+index ef2788221..a8ec572d5 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2628,7 +2640,7 @@ index ef2788221..60cd2d6f8 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,160 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,164 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2789,11 +2801,15 @@ index ef2788221..60cd2d6f8 100644
 +	Detail page layouts	详情页底稿
 +	Layout settings	参数设置
 +	PSD tools	PSD 底稿设置
++	Batch references to PSD	批量参考图转 PSD
++	Batch converts each reference into a separate new PSD. Completed files are kept if cancelled.	批量模式：每张参考图独立新建 PSD；取消后已完成文件保留。
++	Batch PSD {}/{}: {}	批量 PSD {}/{}：{}
++	Batch PSD complete: {}/{}; {}	批量 PSD 完成：{}/{}；{}
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..67d16a97a 100644
+index c0bb1a3ab..db8db227b 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,168 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,172 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2962,6 +2978,10 @@ index c0bb1a3ab..67d16a97a 100644
 +	Detail page layouts	详情页底稿
 +	Layout settings	参数设置
 +	PSD tools	PSD 底稿设置
++	Batch references to PSD	批量参考图转 PSD
++	Batch converts each reference into a separate new PSD. Completed files are kept if cancelled.	批量模式：每张参考图独立新建 PSD；取消后已完成文件保留。
++	Batch PSD {}/{}: {}	批量 PSD {}/{}：{}
++	Batch PSD complete: {}/{}; {}	批量 PSD 完成：{}/{}；{}
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -3881,10 +3901,10 @@ index fd760ec71..cb606e064 100644
 +}
 diff --git a/crates/ui-egui/src/plugin_i18n.rs b/crates/ui-egui/src/plugin_i18n.rs
 new file mode 100644
-index 000000000..5f8c3c44c
+index 000000000..b4ba49d40
 --- /dev/null
 +++ b/crates/ui-egui/src/plugin_i18n.rs
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,214 @@
 +//! Custom tools share the editor's active language and translation catalogs.
 +pub(crate) fn text(source: &str) -> String {
 +    translate(&canonical(source, 0), 0)
@@ -3929,6 +3949,8 @@ index 000000000..5f8c3c44c
 +    if remaining.is_empty() { Some(values) } else { None }
 +}
 +const TEMPLATES: &[&str] = &[
++    "Batch PSD {}/{}: {}",
++    "Batch PSD complete: {}/{}; {}",
 +    "Unsupported layout fields: {}",
 +    "Reference images selected: {}",
 +    "Reference images {} +",

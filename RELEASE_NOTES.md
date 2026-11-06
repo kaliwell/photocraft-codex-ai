@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 新增多参考图批量转 PSD：逐张分析、独立新建、按源文件命名并保留大组。支持逐张进度、失败继续、取消保留已完成文件及 JSON 清单。
+- Add Batch references to PSD: independent analysis and new files per reference, source-based names, major groups, per-item progress, failure continuation and durable cancellation reports.
+
 - 中英文主页优先展示三项主要功能：基本生图、局部修改和移除物体，各有独立 GIF。自制场景实际经过插件 Codex 生图/编辑；英文版重放相同结果，动图压缩等待过程。
 - Lead both showcases with separate Generate, Edit selection and Remove object GIFs. Original examples were generated/edited through the actual plugin; English replays the same outputs and waiting is condensed.
 

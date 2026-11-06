@@ -68,12 +68,12 @@ class NativeWorker:
     def submit(self, request):
         mode = request.get('mode')
         prompt = request.get('prompt', '')
-        if mode not in ('fill', 'remove', 'generate','layout','detail') or not isinstance(prompt, str) or len(prompt) > 4000:
+        if mode not in ('fill', 'remove', 'generate','layout','detail','batch') or not isinstance(prompt, str) or len(prompt) > 4000:
             raise ValueError('请求参数无效。')
-        if mode not in ('remove','layout','detail') and not prompt.strip():
+        if mode not in ('remove','layout','detail','batch') and not prompt.strip():
             raise ValueError('请先输入画面描述。')
         validate_references(request.get('references',[]))
-        if mode in ('layout','detail'):
+        if mode in ('layout','detail','batch'):
             from .layout import validate_options
             validate_options(request.get('layout_options'))
         document=request.get('document',{})
@@ -105,18 +105,24 @@ class NativeWorker:
                 prepared = service.prepare(mode, prompt,
                                            feather_px=0 if mode == 'generate' else 12,
                                            references=request.get('references', []),
-                                           **({'layout_options':request.get('layout_options')} if mode in ('layout','detail') else {}))
+                                           **({'layout_options':request.get('layout_options')} if mode in ('layout','detail','batch') else {}))
                 if 'insertionLayer' in expected:
                     prepared.active_layer=expected['insertionLayer']
             try:
                 history_request=request
-                if mode in ('layout','detail') and prepared.layout_options.get('source')=='layers':
+                if mode in ('layout','detail','batch') and prepared.layout_options.get('source')=='layers':
                     history_request={**request,'references':[{'name':'Selected layers.png','data':base64.b64encode(prepared.references[0].read_bytes()).decode('ascii')}],
                                      'layout_options':{**prepared.layout_options,'source':'references'}}
                 self.history_for(request).save(history_request)
             except Exception as error:
                 self.update(history_warning=str(error))
             self.update(job=str(prepared.job))
+            if mode=='batch':
+                from .batch_layout import run_batch
+                report=run_batch(service,prepared,self.cancel,lambda text:self.update(message=text))
+                failed=sum(item['status']=='failed' for item in report['items'])
+                self.update(busy=False,error=bool(failed),message=f'Batch PSD complete: {len(report["items"])-failed}/{len(report["items"])}; {report["output"]}')
+                return
             result = service.generate(prepared, self.cancel, lambda text: self.update(message=text))
             if self.cancel.is_set():
                 raise Cancelled('已取消')
@@ -124,7 +130,7 @@ class NativeWorker:
             applied=service.apply(prepared, result)
             elapsed = time.monotonic() - started
             self.update(busy=False,
-                        message=('Layout added to current document; save the project when ready' if applied is None else f'PSD base layout saved: {applied}') if mode in ('layout','detail') else f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
+                        message=('Layout added to current document; save the project when ready' if applied is None else f'PSD base layout saved: {applied}') if mode in ('layout','detail','batch') else f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
                         error=False)
         except Cancelled:
             self.update(busy=False, message='已取消', error=False)

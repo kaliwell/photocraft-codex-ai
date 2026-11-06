@@ -45,6 +45,7 @@ Follow the prompt and reference, expand all PSD settings, create the base layout
 | AI editing and generation | Fill a selection, remove objects or generate artwork above the selected layer |
 | Multiple references | Select files, drag images or paste from the clipboard; restore prompts and references from history |
 | Image/layer to PSD | Use attached references or selected layers; work in the current document or a new one |
+| Batch references to PSD | Convert each reference into its own PSD, with per-item progress and durable results/report |
 | Unified PSD settings | Font family/style, pixel dimensions, aspect ratio and DPI beside creation actions |
 | Named major groups | One root folder and at most eight section groups, collapsed by default; text and shapes stay editable |
 | Long detail-page bases | Read the entire page in crops and reconstruct copy, colors, shapes and borders; up to 30000 pixels tall and 32 million pixels total |

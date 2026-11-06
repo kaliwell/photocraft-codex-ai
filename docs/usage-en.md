@@ -83,6 +83,10 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+**Batch conversion**: attach multiple references, expand **PSD tools**, then choose **Batch references to PSD**. Each reference is analyzed independently into a new PSD; references are not merged and the current project is not modified. Font, dimensions and DPI follow the shared settings. Enable reference dimensions to retain each image's own size. Progress shows the current index and filename; failures do not stop later items, and cancellation retains completed files.
+
+Files are written to `runtime/exchange/batch-<job-id>/`, prefixed by index and original filename. `batch-report.json` records successes, errors and pending items. Each PSD keeps editable elements and named major groups. The regular Create PSD base action still uses multiple references to produce one layout.
+
 **One drawer**: choose **PSD tools** to expand the source, destination, font, dimensions, DPI and creation actions within the main composer. No category or settings-window navigation is required. Click again to collapse. Output uses one named root folder with at most eight numbered major section groups, collapsed by default. Elements remain individually editable and keep their painting order.
 
 Choose **Reference images** or **Selected layers** under **Layout source**, then **Create PSD base** or **Detail page base**. Layer mode composites the selected layers on the full canvas, excluding other layers and ignoring the selection crop. No attachment is required. Source layers remain unchanged; current/new destination still follows PSD settings. History stores the layer snapshot and restores it as an attached reference so later layer edits do not change the historical input.
