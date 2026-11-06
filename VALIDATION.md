@@ -259,3 +259,7 @@ Desktop/clippy/wasm/layers pass. Native UI verifies paste/history remain availab
 ## Drawer navigation (2026-11-06)
 
 Native UI navigated All tools, PSD, Detail page and inline settings; assertions verify each category only exposes its matching actions. Screenshots reviewed for content layout and inline font/dimension controls. Composer adjacency before/after selection movement and authenticated PSD worker flow passed. Desktop/clippy/wasm/layers pass.
+
+## Unified drawer and major PSD groups (2026-11-06)
+
+79 Python tests passed, including bounded grouping and stable element order. Native PSD export/reopen verifies named root with at most eight section folders, editable text/shapes, dimensions and fonts. Full 790x26977 rendered RGBA pixels are byte-identical before/after grouping. Zero new remote model calls. Actual single-drawer UI screenshot reviewed; all settings and actions visible together, no category navigation or second panel. Authenticated worker flow passed. Desktop/clippy/wasm/layers passed. Grouped sample delivered locally without overwriting the previous sample.

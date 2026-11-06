@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..0abfe8734
+index 000000000..41f7b3f88
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,848 @@
+@@ -0,0 +1,850 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1316,7 +1316,6 @@ index 000000000..0abfe8734
 +    rect: Option<Rect>,
 +    sidebar_rect: Option<Rect>,
 +    sidebar_open: bool,
-+    sidebar_page: usize,
 +    input: Option<Rect>,
 +    buttons: Vec<(String, Rect)>,
 +    references: Vec<Reference>,
@@ -1436,12 +1435,11 @@ index 000000000..0abfe8734
 +    }
 +    let toolbar_viewport = xf.rect;
 +    let width = (toolbar_viewport.width() - 24.0).clamp(280.0, 480.0);
-+    let size = vec2(width, 180.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
-+    let mut anchor = position(selection, toolbar_viewport, size);
-+    if snapshot.sidebar_open && toolbar_viewport.width() >= width + 524.0 {
-+        anchor.x = anchor.x.min(toolbar_viewport.right() - width - 524.0).max(toolbar_viewport.left() + 8.0);
-+        anchor.y = anchor.y.min((toolbar_viewport.bottom() - 364.0).max(toolbar_viewport.top() + 8.0));
-+    }
++    let size = vec2(
++        width,
++        if snapshot.sidebar_open { (xf.rect.height() - 24.0).min(650.0) } else { 180.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 } },
++    );
++    let anchor = position(selection, toolbar_viewport, size);
 +    let tokens = Tokens::get(ctx);
 +    let mut input_rect = None;
 +    let mut prompt_focused = false;
@@ -1452,31 +1450,37 @@ index 000000000..0abfe8734
 +            ui,
 +            |ui| {
 +                ui.set_width(width - 20.0);
-+                let input = ui.add_enabled(
-+                    !snapshot.busy && !snapshot.loading,
-+                    egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt)
-+                        .hint_text(l("Describe what to edit or generate…"))
-+                        .char_limit(4000)
-+                        .desired_width(f32::INFINITY),
-+                );
-+                input_rect = Some(input.rect);
-+                prompt_focused = input.has_focus();
-+                button_rects.extend(actions(app, ui, &snapshot));
-+                sidebar::references(app, ctx, &snapshot, ui, &mut button_rects);
++                if snapshot.sidebar_open {
++                    ui.set_min_height((xf.rect.height() - 60.0).clamp(120.0, 620.0));
++                }
++                egui::ScrollArea::vertical().id_salt("unified-tools-scroll").max_height((xf.rect.height() - 48.0).max(100.0)).show(ui, |ui| {
++                    let input = ui.add_enabled(
++                        !snapshot.busy && !snapshot.loading,
++                        egui::TextEdit::singleline(&mut app.ui.codex_ai_prompt)
++                            .hint_text(l("Describe what to edit or generate…"))
++                            .char_limit(4000)
++                            .desired_width(f32::INFINITY),
++                    );
++                    input_rect = Some(input.rect);
++                    prompt_focused = input.has_focus();
++                    button_rects.extend(actions(app, ui, &snapshot));
++                    sidebar::references(app, ctx, &snapshot, ui, &mut button_rects);
++                    button_rects.extend(sidebar::controls(app, ctx, &snapshot, ui));
 +
-+                if snapshot.loading {
-+                    ui.label(l("Loading reference images…"));
-+                }
-+                if snapshot.busy {
-+                    ui.horizontal(|ui| {
-+                        ui.spinner();
-+                        widgets::elided_label(ui, &l(&snapshot.message), width - 65.0);
-+                    });
-+                } else if !snapshot.message.is_empty() {
-+                    let display = if snapshot.message.starts_with("PSD base layout saved:") { l("PSD base layout saved") } else { l(&snapshot.message) };
-+                    let text = egui::RichText::new(display).color(if snapshot.error { tokens.danger } else { tokens.text_dim });
-+                    ui.add(egui::Label::new(text).truncate()).on_hover_text(l(&snapshot.message));
-+                }
++                    if snapshot.loading {
++                        ui.label(l("Loading reference images…"));
++                    }
++                    if snapshot.busy {
++                        ui.horizontal(|ui| {
++                            ui.spinner();
++                            widgets::elided_label(ui, &l(&snapshot.message), width - 65.0);
++                        });
++                    } else if !snapshot.message.is_empty() {
++                        let display = if snapshot.message.starts_with("PSD base layout saved:") { l("PSD base layout saved") } else { l(&snapshot.message) };
++                        let text = egui::RichText::new(display).color(if snapshot.error { tokens.danger } else { tokens.text_dim });
++                        ui.add(egui::Label::new(text).truncate()).on_hover_text(l(&snapshot.message));
++                    }
++                });
 +            },
 +        );
 +    });
@@ -1487,8 +1491,6 @@ index 000000000..0abfe8734
 +    state.prompt_focused = prompt_focused;
 +    state.current_prompt = app.ui.codex_ai_prompt.clone();
 +    drop(state);
-+    let side_buttons = sidebar::show(app, ctx, &snapshot, area.response.rect, xf.rect);
-+    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).buttons.extend(side_buttons);
 +    history::show(app, ctx);
 +    layout_options::show(app, ctx);
 +}
@@ -1609,7 +1611,7 @@ index 000000000..0abfe8734
 +                }
 +            }
 +        });
-+        let toggle = ui.button(l("Tools sidebar"));
++        let toggle = ui.button(l("PSD tools"));
 +        buttons.push(("Tools sidebar".into(), toggle.rect));
 +        if toggle.clicked() {
 +            shared(ui.ctx()).lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_open = !status.sidebar_open;
@@ -2452,101 +2454,32 @@ index 000000000..e99ef0d4b
 +}
 diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
 new file mode 100644
-index 000000000..2f655e8c0
+index 000000000..da4bc502e
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/sidebar.rs
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,84 @@
 +//! Canvas-side tools drawer; keeps the selection composer compact.
-+use super::{
-+    Context, PhotocraftApp, Rect, Status, Tokens, history, l, layout_options, paste_reference, pick_references, pos2, reference_error, shared, submit, vec2,
-+};
-+pub(super) fn show(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, main: Rect, viewport: Rect) -> Vec<(String, Rect)> {
-+    let mut button_rects = Vec::new();
++use super::{Context, PhotocraftApp, Rect, Status, history, l, layout_options, paste_reference, pick_references, reference_error, shared, submit, vec2};
++pub(super) fn controls(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui) -> Vec<(String, Rect)> {
++    let mut buttons = Vec::new();
 +    if !snapshot.sidebar_open {
-+        return button_rects;
++        return buttons;
 +    }
-+    let status = shared(ctx);
-+    let tokens = Tokens::get(ctx);
-+    let width = (viewport.width() - 16.0).clamp(320.0, 500.0);
-+    let area = egui::Area::new(egui::Id::unique("codex-tools-sidebar"))
-+        .order(egui::Order::Foreground)
-+        .fixed_pos(attached_position(main, viewport, width))
-+        .movable(false)
-+        .show(ctx, |ui| {
-+            egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).inner_margin(10.0).show(ui, |ui| {
-+                ui.set_width(width - 20.0);
-+                ui.horizontal(|ui| {
-+                    ui.strong(l("Tools sidebar"));
-+                    let close = ui.button(l("Close"));
-+                    button_rects.push(("Close tools sidebar".into(), close.rect));
-+                    if close.clicked() {
-+                        status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_open = false;
-+                    }
-+                });
-+                ui.separator();
-+                let mut page = snapshot.sidebar_page;
-+                ui.horizontal_top(|ui| {
-+                    ui.vertical(|ui| {
-+                        ui.set_width(100.0);
-+                        ui.label(egui::RichText::new(l("Tool categories")).strong());
-+                        ui.add_space(8.0);
-+                        for (index, label) in ["All tools", "PSD base layouts", "Detail page layouts", "Layout settings"].iter().enumerate() {
-+                            let response = ui.add_sized([100.0, 32.0], egui::Button::new(l(label)).selected(page == index));
-+                            button_rects.push((format!("Drawer page {index}"), response.rect));
-+                            if response.clicked() {
-+                                page = index;
-+                            }
-+                        }
-+                    });
-+                    ui.separator();
-+                    egui::ScrollArea::vertical().id_salt("codex-sidebar-scroll").max_height((viewport.height() - 80.0).clamp(150.0, 400.0)).show(ui, |ui| {
-+                        ui.vertical(|ui| {
-+                            ui.set_width((width - 145.0).max(170.0));
-+                            ui.set_min_height(270.0);
-+                            if page == 3 {
-+                                ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::controls(app, ui));
-+                            } else {
-+                                let title = match page {
-+                                    1 => "PSD base layouts",
-+                                    2 => "Detail page base",
-+                                    _ => "All tools",
-+                                };
-+                                ui.heading(l(title));
-+                                ui.add_space(8.0);
-+                                ui.label(l("Choose a source, then create an editable base layout."));
-+                                ui.add_space(8.0);
-+                                let selected_ready = ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::source_buttons(app, ui)).inner;
-+                                let ready = if layout_options::value(app)["source"] == "layers" { selected_ready } else { !snapshot.references.is_empty() };
-+                                ui.add_space(10.0);
-+                                for (mode, label, id) in [("layout", "Create PSD base", "Reference to PSD"), ("detail", "Detail page base", "Detail page base")]
-+                                {
-+                                    if (page == 1 && mode == "detail") || (page == 2 && mode == "layout") {
-+                                        continue;
-+                                    }
-+                                    let b = ui.add_enabled(
-+                                        !snapshot.busy && !snapshot.loading && ready,
-+                                        egui::Button::new(l(label)).min_size(vec2(ui.available_width(), 36.0)),
-+                                    );
-+                                    button_rects.push((id.into(), b.rect));
-+                                    if b.clicked() {
-+                                        submit(app, ctx, mode);
-+                                    }
-+                                    ui.add_space(6.0);
-+                                }
-+                                let settings = ui.button(l("PSD settings"));
-+                                button_rects.push(("PSD settings".into(), settings.rect));
-+                                if settings.clicked() {
-+                                    page = 3;
-+                                }
-+                            }
-+                        });
-+                    });
-+                });
-+                status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_page = page;
-+            });
-+        });
-+    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_rect = Some(area.response.rect);
-+    button_rects
++    ui.separator();
++    ui.strong(l("PSD base layouts"));
++    let selected = ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::source_buttons(app, ui)).inner;
++    let ready = if layout_options::value(app)["source"] == "layers" { selected } else { !snapshot.references.is_empty() };
++    ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::controls(app, ui));
++    ui.horizontal_wrapped(|ui| {
++        for (mode, label, id) in [("layout", "Create PSD base", "Reference to PSD"), ("detail", "Detail page base", "Detail page base")] {
++            let b = ui.add_enabled(ready && !snapshot.busy && !snapshot.loading, egui::Button::new(l(label)));
++            buttons.push((id.into(), b.rect));
++            if b.clicked() {
++                submit(app, ctx, mode);
++            }
++        }
++    });
++    buttons
 +}
 +
 +pub(super) fn references(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui, button_rects: &mut Vec<(String, Rect)>) {
@@ -2608,23 +2541,6 @@ index 000000000..2f655e8c0
 +            state.error = false;
 +        }
 +    }
-+}
-+fn attached_position(main: Rect, viewport: Rect, width: f32) -> egui::Pos2 {
-+    let gap = 8.0;
-+    let height = 350.0;
-+    let (x, y) = if main.right() + gap + width <= viewport.right() - gap {
-+        (main.right() + gap, main.top())
-+    } else if main.left() - gap - width >= viewport.left() + gap {
-+        (main.left() - gap - width, main.top())
-+    } else if main.bottom() + gap + height <= viewport.bottom() - gap {
-+        (main.left(), main.bottom() + gap)
-+    } else {
-+        (main.left(), main.top() - gap - height)
-+    };
-+    pos2(
-+        x.clamp(viewport.left() + gap, (viewport.right() - width - gap).max(viewport.left() + gap)),
-+        y.clamp(viewport.top() + gap, (viewport.bottom() - height - gap).max(viewport.top() + gap)),
-+    )
 +}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
 index e979d3d82..526784f8e 100644
@@ -2698,7 +2614,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..8ae55ae4c 100644
+index ef2788221..60cd2d6f8 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2712,7 +2628,7 @@ index ef2788221..8ae55ae4c 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,159 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,160 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2872,11 +2788,12 @@ index ef2788221..8ae55ae4c 100644
 +	Choose a source, then create an editable base layout.	选择参考来源，制作可编辑的文字、形状和边框底稿。
 +	Detail page layouts	详情页底稿
 +	Layout settings	参数设置
++	PSD tools	PSD 底稿设置
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..e62dd6e52 100644
+index c0bb1a3ab..67d16a97a 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,167 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,168 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -3044,6 +2961,7 @@ index c0bb1a3ab..e62dd6e52 100644
 +	Choose a source, then create an editable base layout.	选择参考来源，制作可编辑的文字、形状和边框底稿。
 +	Detail page layouts	详情页底稿
 +	Layout settings	参数设置
++	PSD tools	PSD 底稿设置
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

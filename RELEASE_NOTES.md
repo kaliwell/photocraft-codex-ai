@@ -1,5 +1,9 @@
 # Unreleased / 统一开发版新增
 
+- 主栏与 PSD 工具合并为单抽屉：一次展开即可设置来源、位置、字体、尺寸、DPI 并制作，取消分类页跳转。
+- PSD 自动按命名大区块分组：一个总组、最多 8 个区块组，默认折叠，保留原始叠放顺序和可编辑元素。
+- Merge composer and PSD tools into one expandable drawer with all settings and actions together. Generated PSDs use a named root and at most eight major groups, collapsed by default, preserving paint order and editable elements.
+
 - 工具抽屉采用左侧分类导航、右侧功能内容布局，包含全部工具、PSD 底稿、详情页底稿、参数设置；参数直接在抽屉中调整，主栏仍保留参考图与历史。
 - Tools drawer now has left navigation and right content for All tools, PSD base layouts, Detail page base and settings. Edit parameters inline while references/history remain in the main composer.
 

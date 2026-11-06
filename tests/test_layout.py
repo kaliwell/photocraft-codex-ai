@@ -7,6 +7,13 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_major_groups_are_bounded_and_preserve_painting_order(self):
+        from photocraft_ai.layout import major_groups
+        value={'height':1000,'elements':[{'kind':'text','y':i,'group':f'Section {i}','text':'x'} for i in range(100)]}
+        groups=major_groups(value)
+        self.assertLessEqual(len(groups),8)
+        self.assertEqual([i for _,indices in groups for i in indices],list(range(100)))
+        self.assertTrue(all(name.startswith(f'{index+1:02}') for index,(name,_) in enumerate(groups)))
     def test_layer_source_requires_selection_before_creating_scratch(self):
         from photocraft_ai.layout_source import selected_layer_reference
         bridge=Mock();bridge.client.run.return_value={'selectedLayers':[]}
@@ -31,7 +38,7 @@ class LayoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);path=root/'layout.json'
             path.write_text(json.dumps({'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title'}]}))
-            bridge=Mock();bridge.client.run.return_value={'width':600,'height':1200,'resolution':72,'layers':[{'id':7}]}
+            bridge=Mock();bridge.client.run.return_value={'width':600,'height':1200,'resolution':72,'layers':[{'id':7}],'layer':8}
             self.assertIsNone(build_layout(bridge,path,root,current=True))
             self.assertFalse(any(call.args[0]=='file.new' for call in bridge.client.run.call_args_list))
             bridge.client.call.assert_not_called()
@@ -68,18 +75,18 @@ class LayoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);path=root/'layout.json'
             path.write_text(json.dumps({'width':600,'height':1200,'dpi':300,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title','size':100,'font':'Arial'}]}))
-            bridge=Mock();bridge.exchange=root
+            bridge=Mock();bridge.exchange=root;bridge.client.run.return_value={'layer':1}
             build_layout(bridge,path,root)
             bridge.client.run.assert_any_call('file.new',width=600,height=1200,resolution=300)
-            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=24.0,font='Arial')
+            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=24.0,font='Arial',name='Title')
 
     def test_selected_named_style_overrides_model_weight(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);path=root/'layout.json'
             path.write_text(json.dumps({'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title','size':48,'font':'Arial','fontStyle':'Bold Italic','weight':400}]}))
-            bridge=Mock();bridge.exchange=root
+            bridge=Mock();bridge.exchange=root;bridge.client.run.return_value={'layer':1}
             build_layout(bridge,path,root)
-            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=48.0,font='Arial',fontStyle='Bold Italic')
+            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=48.0,font='Arial',fontStyle='Bold Italic',name='Title')
 
     def test_history_distinguishes_target_sizes_and_restores_settings(self):
         from photocraft_ai.history import History

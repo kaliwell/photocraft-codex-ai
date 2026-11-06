@@ -42,7 +42,7 @@ def validate_layout(value):
     elements=value.get('elements')
     if not isinstance(elements,list) or not 1<=len(elements)<=(600 if long_page else 150):raise ValueError('Invalid layout elements')
     value={**value,'elements':[dict(e) if isinstance(e,dict) else e for e in elements]}
-    allowed={'kind','name','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
+    allowed={'kind','name','group','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
     for e in value['elements']:
         if not isinstance(e,dict):raise ValueError('Only editable text and shapes are supported')
         # Model responses may use the settings spelling; engine commands use fontStyle.
@@ -52,6 +52,7 @@ def validate_layout(value):
             e['fontStyle']=style
         unknown=set(e)-allowed
         if unknown:raise ValueError('Unsupported layout fields: '+', '.join(sorted(map(str,unknown))))
+        if 'group' in e and (not isinstance(e['group'],str) or not e['group'].strip() or len(e['group'])>80):raise ValueError('Invalid layout group name')
         if e.get('kind') not in ('text','rect','ellipse','path'):raise ValueError('Only editable text and shapes are supported')
         for k in ['x','y','width','height','size','stroke_width','radius']:
             if k in e and (type(e[k]) not in (int,float) or abs(e[k])>(65536 if long_page else 16384) or not math.isfinite(e[k])):raise ValueError('Invalid layout coordinate')
@@ -86,6 +87,7 @@ Return ONLY a JSON object with width,height,background (#RRGGBB),elements (botto
 Each element: kind=text|rect|ellipse|path,name,x,y; rect/ellipse also width,height,fill (#RRGGBB or null),
 optional stroke (#RRGGBB),stroke_width,radius. Text: text,size (points at 72dpi),font,fontStyle,color,align.
 Use exactly these field names and no additional properties. fontStyle is the named font style, e.g. Regular or Bold.
+Also give each element a group string: a descriptive major section name, e.g. Header, Main selling points, Specifications. Use 3-8 major groups, not one group per element. Keep elements of each group contiguous in painting order; preserve overlap order. Give every element a useful name. Use the reference text language for group names. No nested groups.
 Text weight is 100..900. For curved decorative borders use kind=path, points=[{anchor:[x,y],in:[x,y],out:[x,y]},...], closed=false; points can also be [x,y] corners. Maximum 64 points per path.
 Text x,y is its baseline anchor. Maximum 150 elements, dimensions <=8192 and <=32 million pixels.
 Use the first reference for canvas size/layout; additional references are supporting context.
@@ -151,6 +153,32 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
     return path
 
 
+def major_groups(value):
+    runs=[]
+    sections=6 if value.get('long_page') else 3
+    for index,e in enumerate(value['elements']):
+        label=e.get('group')
+        if not label:
+            if e['kind']=='text':
+                region=max(0,min(sections-1,int(e['y']*sections/value['height'])))
+                label=f'文案区块 {region+1}'
+            else:label='版式与装饰'
+        if runs and runs[-1][0]==label:runs[-1][1].append(index)
+        else:runs.append((label,[index]))
+    # Merge adjacent runs only, keeping the original painting order intact.
+    step=max(1,math.ceil(len(runs)/8))
+    result=[]
+    for start in range(0,len(runs),step):
+        chunk=runs[start:start+step]
+        indices=[index for _,items in chunk for index in items]
+        label=chunk[0][0]
+        if label.startswith('文案区块'):
+            text=next((value['elements'][i].get('text','') for i in indices if value['elements'][i]['kind']=='text'),'')
+            label+=' · '+text.replace('\n',' ')[:24]
+        result.append((f'{len(result)+1:02} {label}',indices))
+    return result
+
+
 def build_layout(bridge, path, job, current=False):
     value=validate_layout(json.loads(Path(path).read_text(encoding='utf-8')))
     c=bridge.client
@@ -163,21 +191,29 @@ def build_layout(bridge, path, job, current=False):
         if layers:c.run('layer.select',layer=layers[0]['id'])
     else:
         c.run('file.new',width=value['width'],height=value['height'],resolution=dpi)
-    c.run('shape.create',kind='rect',rect=[0,0,value['width'],value['height']],fill=value['background'],name='Base color')
+    base=c.run('shape.create',kind='rect',rect=[0,0,value['width'],value['height']],fill=value['background'],name='画布底色')['layer']
+    ids=[]
     for e in value['elements']:
         if e['kind']=='text':
             params={k:e[k] for k in ['x','y','text','size','font','fontStyle','color','align','name','weight'] if k in e}
             if params.get('fontStyle'):params.pop('weight',None)
             params['size']=e.get('size',24)*72/dpi
-            c.run('type.create',**params)
+            if not params.get('name','').strip():params['name']=e['text'].replace('\n',' ')[:40]
+            ids.append(c.run('type.create',**params)['layer'])
         else:
             params={'kind':'roundedRect' if e['kind']=='rect' and e.get('radius',0)>0 else e['kind'],'fill':e.get('fill'),
-                    'name':e.get('name','Shape')}
+                    'name':e.get('name') or {'rect':'矩形边框或色块','ellipse':'椭圆装饰','path':'曲线装饰'}[e['kind']]}
             if e['kind']=='path':params['path']={'subpaths':[{'closed':e.get('closed',False),'knots':e['points']}]}
             else:params['rect']=[e['x'],e['y'],e['width'],e['height']]
             if e.get('stroke'):params['stroke']={'width':e.get('stroke_width',1),'fill':e['stroke']}
             if e.get('radius'):params['radii']=e['radius']
-            c.run('shape.create',**params)
+            ids.append(c.run('shape.create',**params)['layer'])
+    groups=[]
+    def group_layers(layers,name):
+        for index,layer in enumerate(layers):c.run('layer.select',layer=layer,mode='replace' if index==0 else 'add')
+        return c.run('layer.groupLayers',name=name)['layer']
+    for name,indices in major_groups(value):groups.append(group_layers([ids[i] for i in indices],name))
+    group_layers([base,*groups],'详情页底稿' if value.get('long_page') else 'PSD 底稿')
     if current:return None  # Leave saving to the user; preserve the current project path.
     output=bridge.exchange/('layout-'+job.name+'.psd')
     c.call('app.save',path=str(output))
