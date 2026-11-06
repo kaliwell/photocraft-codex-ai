@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 工具抽屉采用左侧分类导航、右侧功能内容布局，包含全部工具、PSD 底稿、详情页底稿、参数设置；参数直接在抽屉中调整，主栏仍保留参考图与历史。
+- Tools drawer now has left navigation and right content for All tools, PSD base layouts, Detail page base and settings. Edit parameters inline while references/history remain in the main composer.
+
 - 参考图、缩略图、粘贴、历史和草稿回归生图主栏。PSD 侧栏紧贴主栏并跟随位置变化，空间不足时换边，不再固定到画布右端。
 - Keep references, thumbnails, paste, history and drafts with generation in the main composer. The PSD drawer attaches beside the composer and follows its position, changing sides when space is limited.
 

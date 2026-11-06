@@ -255,3 +255,7 @@ Desktop build, all-targets Clippy, wasm and layers passed. Native UI verifies de
 ## Attached PSD drawer and primary references (2026-11-06)
 
 Desktop/clippy/wasm/layers pass. Native UI verifies paste/history remain available with the drawer closed. Drawer-to-composer gap stays within 10 screen points before and after moving the selection; screenshots reviewed for both right and left placement. PSD worker flow still completes. No remote generation requested.
+
+## Drawer navigation (2026-11-06)
+
+Native UI navigated All tools, PSD, Detail page and inline settings; assertions verify each category only exposes its matching actions. Screenshots reviewed for content layout and inline font/dimension controls. Composer adjacency before/after selection movement and authenticated PSD worker flow passed. Desktop/clippy/wasm/layers pass.

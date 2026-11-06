@@ -49,6 +49,8 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+**Drawer navigation**: open **Tools sidebar** and choose All tools, PSD base layouts, Detail page base or PSD settings on the left. The right pane shows the matching action or inline parameter controls. The drawer stays adjacent to the composer; references and history remain in the main composer.
+
 Choose **Reference images** or **Selected layers** under **Layout source**, then **Create PSD base** or **Detail page base**. Layer mode composites the selected layers on the full canvas, excluding other layers and ignoring the selection crop. No attachment is required. Source layers remain unchanged; current/new destination still follows PSD settings. History stores the layer snapshot and restores it as an attached reference so later layer edits do not change the historical input.
 
 The main composer keeps the prompt, edit/remove/generate actions, reference attachments/thumbnails, paste, history and drafts together. **Tools sidebar** opens an adjacent PSD drawer with source selection, layout actions and settings. It follows the main composer, preferring its right side and switching left or vertically when needed, rather than docking to the canvas edge. Drop references on either area; paste clipboard images in the prompt or over the drawer. Long thumbnails retain the full original. Hover over a saved-layout status to view its full path.
