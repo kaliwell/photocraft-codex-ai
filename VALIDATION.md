@@ -263,3 +263,9 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Unified drawer and major PSD groups (2026-11-06)
 
 79 Python tests passed, including bounded grouping and stable element order. Native PSD export/reopen verifies named root with at most eight section folders, editable text/shapes, dimensions and fonts. Full 790x26977 rendered RGBA pixels are byte-identical before/after grouping. Zero new remote model calls. Actual single-drawer UI screenshot reviewed; all settings and actions visible together, no category navigation or second panel. Authenticated worker flow passed. Desktop/clippy/wasm/layers passed. Grouped sample delivered locally without overwriting the previous sample.
+# Bilingual animated showcase (2026-11-06)
+
+- Recorded Chinese and English native UI sessions separately using original project example artwork. No user product references or private history included.
+- Both GIFs contain five stages at 1152×720 with positive frame durations and infinite looping; file sizes are under 450 KiB each. Verified 20 Markdown image references resolve locally.
+- Full-resolution unified settings and editable named-group screenshots reviewed in both languages. Source generation uses a pre-analyzed example; README and guides disclose this and distinguish animation playback from model latency.
+- Documentation/media only; application code and release installation packages are unchanged.

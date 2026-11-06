@@ -2,7 +2,13 @@
 
 [中文指南](usage-zh.md) · [Back to README](../README.en.md)
 
-These screenshots show the unified development build on PhotoCraft 0.20.1 (merge commit `d421251`). The published v0.4.0 ZIP predates the cutter, canvas clipboard export and shared language support in this merge. The full feature set below does not describe that older package.
+The showcase now reflects the current unified drawer and named groups. The older v0.4.0 ZIP predates some features.
+
+## Animated walkthrough
+
+![English workflow animation](../examples/usage/en/workflow.gif)
+
+Recorded in the actual local UI with a pre-analyzed original sample. No remote model call; animation timing is not generation speed.
 
 ## 1. Selection AI and multiple references
 
@@ -74,3 +80,9 @@ This is layout reconstruction, not pixel-perfect recovery. Check OCR, substitute
 [Test reference](../examples/layout-base-reference.png) · [Editable PSD sample](../examples/layout-base-demo.psd)
 
 Ordinary generated results are inserted above the layer selected when the task starts. With no selected layer they go to the top, preserving the existing undoable import workflow.
+
+## Unified PSD drawer and grouped output
+
+![PSD settings](../examples/usage/en/psd-settings.png)
+
+![Grouped PSD](../examples/usage/en/psd-groups.png)

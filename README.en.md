@@ -1,22 +1,45 @@
 # PhotoCraft · Codex AI
 
-New **Detail page base**: analyze complete long pages through numbered crops and reconstruct editable text, shapes and borders in a long PSD, excluding products and photographs. Supports height up to 30000 pixels; see the [English guide](docs/usage-en.md).
+[中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)
 
-**PSD settings** now supports target pixel dimensions, aspect ratios, DPI and font family for reference-to-PSD reconstruction, including recomposing square references into 1:2 layouts. Settings are included in history. See the [English guide](docs/usage-en.md#6-reference-to-psd-base-layout).
+**One drawer for AI editing, references and editable PSD base layouts.**
 
-[中文](README.md) · [Illustrated guide](docs/usage-en.md) · [Project data paths](docs/project-data-en.md)
+## Animated walkthrough
 
-**Native selection AI, references, long-image cutting and canvas clipboard export.**
+![English walkthrough: references, unified settings, PSD creation and named groups](examples/usage/en/workflow.gif)
 
-Screenshots show the unified development build; the published v0.4.0 ZIP predates some features below.
+Follow the prompt and reference, expand all PSD settings, create the base layout, then reveal its named groups. Recorded in the actual application using a pre-analyzed original sample. No remote model call is made in this demonstration; animation timing does not represent generation speed.
 
-## Screenshots
+## What you can do
 
-![Selection AI and references](examples/usage/en/references.png)
+| Feature | Workflow |
+| --- | --- |
+| AI editing and generation | Fill a selection, remove objects or generate artwork above the selected layer |
+| Multiple references | Select files, drag images or paste from the clipboard; restore prompts and references from history |
+| Image/layer to PSD | Use attached references or selected layers; work in the current document or a new one |
+| Unified PSD settings | Font family/style, pixel dimensions, aspect ratio and DPI beside creation actions |
+| Named major groups | One root folder and at most eight section groups, collapsed by default; text and shapes stay editable |
+| Long detail-page bases | Read the entire page in crops and reconstruct copy, colors, shapes and borders; up to 30000 pixels tall and 32 million pixels total |
+| Cutting and clipboard export | Adjust cut lines, save JSON plans, export PNG ZIPs and copy the full canvas |
+| Project history | Store prompts and reference snapshots per project without creating duplicate records on restore |
 
-![Full-image view in the long-image cutter](examples/usage/en/cutter.png)
+PSD bases exclude products, people and photographic backgrounds. Review OCR and layout manually. [Full guide](docs/usage-en.md)
 
-![Project history](examples/usage/en/history.png)
+## Updated interface
+
+### Settings and creation in one drawer
+
+![English: unified PSD source, font, size, ratio and destination controls](examples/usage/en/psd-settings.png)
+
+### Named folders instead of scattered layers
+
+![English: editable PSD with named major groups](examples/usage/en/psd-groups.png)
+
+### Long-image cutting
+
+![English: full-image view and adjustable cut lines](examples/usage/en/cutter.png)
+
+These demos show the current unified development build. The published v0.4.0 ZIP predates some of these features; distinguish current source/local updates from the older package.
 
 ## Usage
 

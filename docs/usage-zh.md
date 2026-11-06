@@ -2,7 +2,13 @@
 
 [English guide](usage-en.md) · [返回主页](../README.md)
 
-这些截图来自 PhotoCraft 0.20.1 的统一开发版（合并提交 `d421251`）。已发布的 v0.4.0 ZIP 尚未包含长图切割、复制画布及本次统一语言支持；请勿把下面的完整功能图当作该旧包的功能清单。
+展示已更新为当前单抽屉与命名大组版本。旧版 v0.4.0 ZIP 不包含全部新功能。
+
+## 动态演示
+
+![中文动态操作演示](../examples/usage/zh-hans/workflow.gif)
+
+本地真实界面录制，使用预先分析的自制示例；未调用远程模型，动画时长不代表生成速度。
 
 ## 1. 选区 AI 与多图参考
 
@@ -74,3 +80,9 @@
 [测试参考图](../examples/layout-base-reference.png) · [可编辑 PSD 示例](../examples/layout-base-demo.psd)
 
 普通 AI 生成结果放在发起任务时选中的图层上方；未选中图层时才放到最顶层，保留原来的可撤销导入方式。
+
+## PSD 单抽屉与大组效果
+
+![PSD settings](../examples/usage/zh-hans/psd-settings.png)
+
+![Grouped PSD](../examples/usage/zh-hans/psd-groups.png)

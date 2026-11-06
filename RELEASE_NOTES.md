@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- GitHub 中英文主页和指南更新：分语言动态 GIF、当前单抽屉设置截图、命名大组示例与功能表；演示使用预先分析的自制示例，不代表远程生成速度。
+- Refresh separate Chinese/English GitHub showcases with animated GIFs, unified settings screenshots, named-group examples and feature tables. Demonstrations use a pre-analyzed original sample rather than measuring remote generation speed.
+
 - 主栏与 PSD 工具合并为单抽屉：一次展开即可设置来源、位置、字体、尺寸、DPI 并制作，取消分类页跳转。
 - PSD 自动按命名大区块分组：一个总组、最多 8 个区块组，默认折叠，保留原始叠放顺序和可编辑元素。
 - Merge composer and PSD tools into one expandable drawer with all settings and actions together. Generated PSDs use a named root and at most eight major groups, collapsed by default, preserving paint order and editable elements.
