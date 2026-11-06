@@ -126,3 +126,8 @@ Ordinary generated results are inserted above the layer selected when the task s
 ![PSD settings](../examples/usage/en/psd-settings.png)
 
 ![Grouped PSD](../examples/usage/en/psd-groups.png)
+
+
+### Automatic PSD background outpainting
+
+When Adapt PSD ratio changes the aspect ratio of a document with a canvas-spanning raster scene, it automatically uses the existing Codex image generator to extend that scene. No extra steps; image generation must be available. Text, logos and shapes reflow separately. Original scene/repair layers remain hidden in the copy, with an added AI outpainted background layer. Original interior scene pixels are retained with edge blending; AI-generated extensions require visual review. Failed or cancelled generation does not replace the source project.

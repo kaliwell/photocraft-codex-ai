@@ -165,3 +165,8 @@ python tests/smoke_photocraft.py
 | [0.2.6](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.6) | 旧版自带 Python、Pillow、PhotoCraft 和 Codex CLI 的便携包 |
 | [0.2.5](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.5) | 生成图片取消额外羽化，保留原始选区遮罩 |
 | 0.2.4–0.2.1 | 独立代理、HTTPS 错误分类与超时、局部编辑羽化、单次生成和延迟优化 |
+
+
+### PSD 背景自动扩图
+
+使用「PSD 比例自适应」改变宽高比时，若存在覆盖画布的位图场景，会自动调用现有 Codex 生图能力扩展背景，避免分别移动场景图层造成接缝。无需额外操作；需要生图可用。文字、Logo 与形状单独排版；原背景及修补层在副本中隐藏保留，新增「AI outpainted background」图层。原场景中心像素保留，边缘融合；新区域由 AI 生成，需要检查细节。生成失败或取消时不会替换原工程。

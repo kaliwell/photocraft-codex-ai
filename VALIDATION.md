@@ -292,3 +292,8 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Square-to-portrait scene regression (2026-11-06)
 
 - 88 Python tests passed. Real f2.psd 1500×1500 → 1500×2000: analyzed with Codex, saved/reopened in the native editor; all 24 original layer kinds retained, source hash unchanged. Preview reviewed for background continuity. Canvas-spanning raster photos and edge repairs now share a uniform cover transform; foreground copy can reflow separately. Cropping remains possible for combined raster product/background scenes.
+
+
+## Background outpaint regression (2026-11-06)
+
+- 92 Python tests passed, including nested gradient/background isolation, original interior pixel retention, alpha holes and imported-layer identity. Real f1.psd background generation through Codex; native save/reopen at 1500×2000 with all 19 original layers retained plus one generated scene layer. Source SHA-256 unchanged. Final native screenshot reviewed: editable text and logo visible, original scene layers hidden, no repeated horizontal strip. The first import-path/foreground-layer-order problems were fixed and the same generated background was reused for final native checks.

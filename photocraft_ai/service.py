@@ -157,6 +157,8 @@ class Service:
             full,_=self.bridge._snapshot(target)
             source=job/'reflow-source.png';full.save(source)
             (job/'reflow-source.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf8')
+            from .reflow_background import capture_scene
+            capture_scene(self.bridge,target,info,job,layout_options['width'],layout_options['height'])
         if mode in ('layout','detail','batch','reflow') and layout_options['destination']=='current':
             target=self.bridge.active_image()
             if not target:raise ValueError('Open a document before creating the layout')
@@ -207,6 +209,8 @@ class Service:
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
         if prepared.mode=='reflow':
             from .reflow import analyze_reflow
+            from .reflow_background import generate_scene
+            generate_scene(prepared,self.backend,cancel,progress)
             return analyze_reflow(prepared,cancel,progress)
         if prepared.mode in ('layout','detail','batch','reflow'):
             from .layout import generate_layout

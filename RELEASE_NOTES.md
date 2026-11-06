@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 比例自适应支持背景自动扩图：隔离场景，生成扩展区域，保留可编辑文字与 Logo，原背景在新副本中隐藏备份。
+- Automatic background outpainting during PSD ratio adaptation, retaining editable foreground layers and hidden original scene layers.
+
 - 修复方图转竖图时，未命名场景图与补边层分别移动导致的透明空洞和接缝；相连场景使用同一等比覆盖变换，文案区块单独排版。位图场景铺满不同宽高比时可能裁切背景。
 - Fix transparent gaps when resizing square PSDs to portrait: canvas scene rasters and edge repairs share a uniform cover transform, while copy is rearranged separately. Raster scenes may be cropped to fill the target aspect ratio.
 
