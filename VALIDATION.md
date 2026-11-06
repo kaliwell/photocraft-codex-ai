@@ -287,3 +287,8 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Existing PSD ratio adaptation (2026-11-06)
 
 87 Python tests pass: grouped content extraction, bounded complete transform plans, split gray panels/dividers and invalid coordinates. Five user 1500x2000 PSDs converted to 1500x1500 copies, reopened with identical layer-kind counts and unchanged source hashes. All final previews reviewed. The split-panel case was corrected to preserve panel backgrounds/clipping, and the earlier preview archived locally. Native button/worker flow verifies a new sized copy while retaining the original document. Desktop/clippy/wasm/layers passed. User files/plans/previews remain local. Single flattened layers cannot be internally recomposed.
+
+
+## Square-to-portrait scene regression (2026-11-06)
+
+- 88 Python tests passed. Real f2.psd 1500×1500 → 1500×2000: analyzed with Codex, saved/reopened in the native editor; all 24 original layer kinds retained, source hash unchanged. Preview reviewed for background continuity. Canvas-spanning raster photos and edge repairs now share a uniform cover transform; foreground copy can reflow separately. Cropping remains possible for combined raster product/background scenes.

@@ -3,6 +3,12 @@ from photocraft_ai.reflow import content_units,validate_plan
 
 
 class ReflowTests(unittest.TestCase):
+    def test_unnamed_full_canvas_photo_and_edge_repair_stay_aligned(self):
+        info={'width':1500,'height':1500,'layers':[{'kind':'Group','name':'Copy','children':[{'kind':'Type','name':'Title','bounds':[0,0,500,100]}]},{'kind':'Pixel','name':'Layer 2','bounds':[-131,0,209,1500]},{'kind':'Pixel','name':'Layer 1','bounds':[60,0,1500,1500]},{'kind':'Pixel','name':'Hidden scene','visible':False,'bounds':[0,0,1500,1500]}]}
+        units,backgrounds=content_units(info)
+        self.assertEqual(len(units),1)
+        self.assertEqual([b['path'] for b in backgrounds],[(1,),(2,)])
+        self.assertTrue(all(b['scene'] for b in backgrounds))
     def test_combined_workspace_guard_prevents_crossed_large_canvases(self):
         from photocraft_ai.reflow import validate_workspace
         validate_workspace({'width':1500,'height':2000},1500,1500)

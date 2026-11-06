@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复方图转竖图时，未命名场景图与补边层分别移动导致的透明空洞和接缝；相连场景使用同一等比覆盖变换，文案区块单独排版。位图场景铺满不同宽高比时可能裁切背景。
+- Fix transparent gaps when resizing square PSDs to portrait: canvas scene rasters and edge repairs share a uniform cover transform, while copy is rearranged separately. Raster scenes may be cropped to fill the target aspect ratio.
+
 - 新增现有 PSD 比例自适应：分析当前文档内容，在新副本中重排区块并等比缩放，保留原文字、智能对象、分组与 DPI。纯色背景分栏和分隔线单独适配画布。
 - Adapt existing PSD ratios by analyzing current content, repositioning/uniformly scaling groups in a new copy, retaining text, smart objects, groups and DPI. Named background panels and dividers adapt separately.
 
