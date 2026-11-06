@@ -251,3 +251,7 @@ Desktop, Clippy, wasm and layers checks pass. Native UI screenshot reviewed with
 ## Compact composer and tools sidebar (2026-11-06)
 
 Desktop build, all-targets Clippy, wasm and layers passed. Native UI verifies default collapsed sidebar hides secondary actions, opens with Tools sidebar, exposes PSD controls, completes the authenticated worker flow, and closes successfully. Compact and expanded screenshots reviewed. Composer and sidebar both participate in reference-drop and clipboard routing. No new remote generation requested.
+
+## Attached PSD drawer and primary references (2026-11-06)
+
+Desktop/clippy/wasm/layers pass. Native UI verifies paste/history remain available with the drawer closed. Drawer-to-composer gap stays within 10 screen points before and after moving the selection; screenshots reviewed for both right and left placement. PSD worker flow still completes. No remote generation requested.

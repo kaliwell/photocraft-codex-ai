@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 参考图、缩略图、粘贴、历史和草稿回归生图主栏。PSD 侧栏紧贴主栏并跟随位置变化，空间不足时换边，不再固定到画布右端。
+- Keep references, thumbnails, paste, history and drafts with generation in the main composer. The PSD drawer attaches beside the composer and follows its position, changing sides when space is limited.
+
 - 浮动栏精简为提示词与常用 AI 操作，PSD、参考图和历史移至可展开的右侧工具栏，支持关闭、滚动、拖入和粘贴参考图。
 - Compact composer with prompt and common AI actions; PSD, references and history move to a collapsible right-side tools drawer with scrolling, image drops and clipboard paste.
 

@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..4038cdc28
+index 000000000..934dcb17e
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,846 @@
+@@ -0,0 +1,843 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1425,8 +1425,6 @@ index 000000000..4038cdc28
 +        return;
 +    }
 +    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-+    let side_buttons = sidebar::show(app, ctx, &snapshot, xf.rect);
-+    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).buttons = side_buttons.clone();
 +    let Some(selection) = selection_rect(app, ctx, xf) else {
 +        history::show(app, ctx);
 +        layout_options::show(app, ctx);
@@ -1435,18 +1433,14 @@ index 000000000..4038cdc28
 +    if !selection.intersects(xf.rect) || xf.rect.width() < 320.0 || xf.rect.height() < 150.0 {
 +        return;
 +    }
-+    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-+    let mut toolbar_viewport = xf.rect;
-+    if snapshot.sidebar_open && xf.rect.width() > 700.0 {
-+        toolbar_viewport.max.x -= 336.0;
-+    }
++    let toolbar_viewport = xf.rect;
 +    let width = (toolbar_viewport.width() - 24.0).clamp(280.0, 480.0);
-+    let size = vec2(width, 116.0);
++    let size = vec2(width, 180.0 + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
 +    let anchor = position(selection, toolbar_viewport, size);
 +    let tokens = Tokens::get(ctx);
 +    let mut input_rect = None;
 +    let mut prompt_focused = false;
-+    let mut button_rects = side_buttons;
++    let mut button_rects = Vec::new();
 +    let area = egui::Area::new(egui::Id::unique("codex-ai-toolbar")).order(egui::Order::Foreground).fixed_pos(anchor).movable(false).show(ctx, |ui| {
 +        ui.set_clip_rect(xf.rect);
 +        egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).corner_radius(tokens.radius).inner_margin(10.0).show(
@@ -1463,6 +1457,7 @@ index 000000000..4038cdc28
 +                input_rect = Some(input.rect);
 +                prompt_focused = input.has_focus();
 +                button_rects.extend(actions(app, ui, &snapshot));
++                sidebar::references(app, ctx, &snapshot, ui, &mut button_rects);
 +
 +                if snapshot.loading {
 +                    ui.label(l("Loading reference images…"));
@@ -1487,6 +1482,8 @@ index 000000000..4038cdc28
 +    state.prompt_focused = prompt_focused;
 +    state.current_prompt = app.ui.codex_ai_prompt.clone();
 +    drop(state);
++    let side_buttons = sidebar::show(app, ctx, &snapshot, area.response.rect, xf.rect);
++    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).buttons.extend(side_buttons);
 +    history::show(app, ctx);
 +    layout_options::show(app, ctx);
 +}
@@ -2448,15 +2445,15 @@ index 000000000..095717d95
 +}
 diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
 new file mode 100644
-index 000000000..033e18123
+index 000000000..73e531c44
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/sidebar.rs
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,133 @@
 +//! Canvas-side tools drawer; keeps the selection composer compact.
 +use super::{
 +    Context, PhotocraftApp, Rect, Status, Tokens, history, l, layout_options, paste_reference, pick_references, pos2, reference_error, shared, submit, vec2,
 +};
-+pub(super) fn show(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, viewport: Rect) -> Vec<(String, Rect)> {
++pub(super) fn show(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, main: Rect, viewport: Rect) -> Vec<(String, Rect)> {
 +    let mut button_rects = Vec::new();
 +    if !snapshot.sidebar_open {
 +        return button_rects;
@@ -2466,7 +2463,7 @@ index 000000000..033e18123
 +    let width = (viewport.width() - 16.0).clamp(240.0, 320.0);
 +    let area = egui::Area::new(egui::Id::unique("codex-tools-sidebar"))
 +        .order(egui::Order::Foreground)
-+        .fixed_pos(pos2(viewport.right() - width - 8.0, viewport.top() + 8.0))
++        .fixed_pos(attached_position(main, viewport, width))
 +        .movable(false)
 +        .show(ctx, |ui| {
 +            egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).inner_margin(10.0).show(ui, |ui| {
@@ -2501,68 +2498,89 @@ index 000000000..033e18123
 +                            status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).settings_open = true;
 +                        }
 +                    });
-+                    ui.separator();
-+                    ui.label(egui::RichText::new(l("References and history")).strong());
-+                    ui.horizontal_wrapped(|ui| {
-+                        let add = ui
-+                            .add_enabled(
-+                                !snapshot.busy && !snapshot.loading && !app.file_dialog_open(),
-+                                egui::Button::new(pt!("Reference images {} +", snapshot.references.len())),
-+                            )
-+                            .on_hover_text(l("Select multiple images; refer to reference 1, reference 2, etc. in your prompt"));
-+                        button_rects.push(("添加参考图".into(), add.rect));
-+                        if add.clicked() {
-+                            let ctx = ui.ctx().clone();
-+                            if let Err(error) = pick_references(app, &ctx) {
-+                                let state = shared(&ctx);
-+                                let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+                                state.message = error;
-+                                state.error = true;
-+                            }
-+                        }
-+                        let paste = ui
-+                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
-+                            .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
-+                        button_rects.push(("Paste reference image".into(), paste.rect));
-+                        if paste.clicked() {
-+                            let result = paste_reference(app, ctx);
-+                            if let Err(error) = result {
-+                                reference_error(ctx, error);
-+                            }
-+                        }
-+
-+                        history::buttons(app, ui, snapshot, &mut button_rects);
-+                    });
-+                    if !snapshot.references.is_empty() {
-+                        let mut remove = None;
-+                        egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
-+                            ui.horizontal(|ui| {
-+                                for (index, reference) in snapshot.references.iter().enumerate() {
-+                                    ui.vertical(|ui| {
-+                                        ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
-+                                        let response = ui
-+                                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
-+                                            .on_hover_text(l("Remove this reference image"));
-+                                        button_rects.push((pt!("移除参考图{}", index + 1), response.rect));
-+                                        if response.clicked() {
-+                                            remove = Some(index);
-+                                        }
-+                                    });
-+                                }
-+                            });
-+                        });
-+                        if let Some(index) = remove {
-+                            let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+                            state.references.remove(index);
-+                            state.message = pt!("Reference images selected: {}", state.references.len());
-+                            state.error = false;
-+                        }
-+                    }
 +                });
 +            });
 +        });
 +    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_rect = Some(area.response.rect);
 +    button_rects
++}
++
++pub(super) fn references(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui, button_rects: &mut Vec<(String, Rect)>) {
++    let status = shared(ctx);
++    ui.separator();
++    ui.label(egui::RichText::new(l("References and history")).strong());
++    ui.horizontal_wrapped(|ui| {
++        let add = ui
++            .add_enabled(
++                !snapshot.busy && !snapshot.loading && !app.file_dialog_open(),
++                egui::Button::new(pt!("Reference images {} +", snapshot.references.len())),
++            )
++            .on_hover_text(l("Select multiple images; refer to reference 1, reference 2, etc. in your prompt"));
++        button_rects.push(("添加参考图".into(), add.rect));
++        if add.clicked() {
++            let ctx = ui.ctx().clone();
++            if let Err(error) = pick_references(app, &ctx) {
++                let state = shared(&ctx);
++                let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                state.message = error;
++                state.error = true;
++            }
++        }
++        let paste = ui
++            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
++            .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
++        button_rects.push(("Paste reference image".into(), paste.rect));
++        if paste.clicked() {
++            let result = paste_reference(app, ctx);
++            if let Err(error) = result {
++                reference_error(ctx, error);
++            }
++        }
++
++        history::buttons(app, ui, snapshot, button_rects);
++    });
++    if !snapshot.references.is_empty() {
++        let mut remove = None;
++        egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
++            ui.horizontal(|ui| {
++                for (index, reference) in snapshot.references.iter().enumerate() {
++                    ui.vertical(|ui| {
++                        ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
++                        let response = ui
++                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
++                            .on_hover_text(l("Remove this reference image"));
++                        button_rects.push((pt!("移除参考图{}", index + 1), response.rect));
++                        if response.clicked() {
++                            remove = Some(index);
++                        }
++                    });
++                }
++            });
++        });
++        if let Some(index) = remove {
++            let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++            state.references.remove(index);
++            state.message = pt!("Reference images selected: {}", state.references.len());
++            state.error = false;
++        }
++    }
++}
++fn attached_position(main: Rect, viewport: Rect, width: f32) -> egui::Pos2 {
++    let gap = 8.0;
++    let height = 180.0;
++    let (x, y) = if main.right() + gap + width <= viewport.right() - gap {
++        (main.right() + gap, main.top())
++    } else if main.left() - gap - width >= viewport.left() + gap {
++        (main.left() - gap - width, main.top())
++    } else if main.bottom() + gap + height <= viewport.bottom() - gap {
++        (main.left(), main.bottom() + gap)
++    } else {
++        (main.left(), main.top() - gap - height)
++    };
++    pos2(
++        x.clamp(viewport.left() + gap, (viewport.right() - width - gap).max(viewport.left() + gap)),
++        y.clamp(viewport.top() + gap, (viewport.bottom() - height - gap).max(viewport.top() + gap)),
++    )
 +}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
 index e979d3d82..526784f8e 100644
