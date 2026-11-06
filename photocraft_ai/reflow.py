@@ -116,6 +116,10 @@ def apply_reflow(bridge,prepared,path):
         for index in indices:row=rows[index];rows=row.get('children',[])
         return row['id']
     c.run('select.deselect') if copied.get('hasSelection') else None
+    covers=prepared.job/'reflow-merged-covers.json'
+    if covers.exists():
+        for index in json.loads(covers.read_text(encoding='utf8')):
+            c.run('layer.setProps',layer=copied['layers'][index]['id'],visible=False)
     c.run('image.canvasSize',width=max(width,info['width']),height=max(height,info['height']),anchor='topLeft',extensionColor='white')
     for item in backgrounds:
         c.run('layer.setProps',layer=layer_id(item['path']),locked=False)

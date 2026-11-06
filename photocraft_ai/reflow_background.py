@@ -22,9 +22,8 @@ def scene_roots(info):
         for i,r in enumerate(rows):
             if not r.get('visible',True):continue
             key=path+(i,)
-            if editable(r):
-                if r.get('children'):walk(r['children'],key)
-            elif r['kind']!='Smart Object' or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9):
+            if r.get('children'):walk(r['children'],key)
+            elif not editable(r) and (not path or r['kind'] in ('Fill','Adjustment') or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)) and (r['kind']!='Smart Object' or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)):
                 candidates.append(key)
                 b=r.get('bounds')
                 full=full or bool(b and b[2]>=info['width']*.9 and b[3]>=info['height']*.9)
@@ -41,6 +40,9 @@ def capture_scene(bridge,target,info,job,width,height):
     try:
         c.run('image.duplicate',name='Background outpaint source',mergedOnly=False)
         scratch=c.run('session.inspect')['active'];copy=c.run('document.inspect')
+        # info may deliberately suppress a stamped cover in this scratch copy.
+        for i,row in enumerate(info['layers']):
+            if not row.get('visible',True) and copy['layers'][i].get('visible',True):c.run('layer.setProps',layer=copy['layers'][i]['id'],visible=False)
         def hide(rows,path=()):
             for i,row in enumerate(rows):
                 key=path+(i,)
@@ -49,7 +51,10 @@ def capture_scene(bridge,target,info,job,width,height):
                 elif row.get('visible',True):c.run('layer.setProps',layer=row['id'],visible=False)
         hide(copy['layers'])
         c.call('app.save',path=str(path))
-        with Image.open(path) as image:image.convert('RGBA').save(job/'reflow-scene.png')
+        with Image.open(path) as image:
+            rgba=image.convert('RGBA')
+            if all(high-low<=2 for low,high in rgba.getextrema()[:3]) and rgba.getchannel('A').getextrema()==(255,255):return
+            rgba.save(job/'reflow-scene.png')
         (job/'reflow-scene-layers.json').write_text(json.dumps(roots),encoding='utf8')
     finally:
         if scratch is not None:c.run('file.close',document=scratch)

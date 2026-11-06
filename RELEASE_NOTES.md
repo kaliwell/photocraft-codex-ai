@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复置顶合并预览遮挡比例自适应：对比重复盖印与原分层，仅在新副本隐藏重复盖印；保留剪贴分组，纯色背景跳过扩图。
+- Detect redundant leading stamped previews before PSD reflow, retaining them hidden in the copy; preserve clipped card groups and skip outpainting flat backgrounds.
+
 - PSD 比例自适应支持背景自动扩图：隔离场景，生成扩展区域，保留可编辑文字与 Logo，原背景在新副本中隐藏备份。
 - Automatic background outpainting during PSD ratio adaptation, retaining editable foreground layers and hidden original scene layers.
 

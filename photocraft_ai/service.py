@@ -155,6 +155,8 @@ class Service:
             content_units(info)
             revision=self.bridge._revision(target)
             full,_=self.bridge._snapshot(target)
+            from .reflow_merged import isolate_editable
+            info,full=isolate_editable(self.bridge,target,info,full,job)
             source=job/'reflow-source.png';full.save(source)
             (job/'reflow-source.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf8')
             from .reflow_background import capture_scene

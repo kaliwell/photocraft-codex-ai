@@ -297,3 +297,9 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Background outpaint regression (2026-11-06)
 
 - 92 Python tests passed, including nested gradient/background isolation, original interior pixel retention, alpha holes and imported-layer identity. Real f1.psd background generation through Codex; native save/reopen at 1500×2000 with all 19 original layers retained plus one generated scene layer. Source SHA-256 unchanged. Final native screenshot reviewed: editable text and logo visible, original scene layers hidden, no repeated horizontal strip. The first import-path/foreground-layer-order problems were fixed and the same generated background was reused for final native checks.
+
+
+## Stamped-preview regression (2026-11-06)
+
+- 96 Python tests passed, including visible/hidden preview versions, partial/masked covers, visual mismatch rejection, and foreground card/clipping preservation.
+- Real 041500.psb 1500×1500 → 1500×2000 through Codex layout analysis and native save/reopen: 34 original layers and kinds preserved, all six leading preview versions hidden in the result, editable groups visible; source SHA-256 unchanged. Visible preview matched the underlying stack with mean RGB difference 0.0011/255 and 100% of sampled pixels within tolerance. Native final preview reviewed: portraits, products, text and color labels visible. Flat white background skipped image generation.
