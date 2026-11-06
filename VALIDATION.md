@@ -303,3 +303,12 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 
 - 96 Python tests passed, including visible/hidden preview versions, partial/masked covers, visual mismatch rejection, and foreground card/clipping preservation.
 - Real 041500.psb 1500×1500 → 1500×2000 through Codex layout analysis and native save/reopen: 34 original layers and kinds preserved, all six leading preview versions hidden in the result, editable groups visible; source SHA-256 unchanged. Visible preview matched the underlying stack with mean RGB difference 0.0011/255 and 100% of sampled pixels within tolerance. Native final preview reviewed: portraits, products, text and color labels visible. Flat white background skipped image generation.
+
+
+## Audit fix verification (2026-11-06)
+
+- 102 Python tests passed, including outpainted clipping/mask grouping, 4% and single-pixel stamp changes, flattened background-only planning, cache capacity/expiry/read-only status and artwork preservation.
+- Real 041500.psb reflow with Codex layout analysis: strict duplicate-cover comparison accepted the actual redundant stamp; 34 layers preserved after native save/reopen, source hash unchanged.
+- Isolated native outpaint-branch regression on 041500.psb used a white generated-background fixture and deterministic layout (no new image generation): four clipping relationships and all group children remained intact; saved/reopened and reviewed screenshot. This also exposed/fixed import ordering above native Background layers.
+- Flattened native fixture derived from f1.psd: cached previously generated background reused through a stub backend; empty foreground layout skipped analysis, native output reopened at 1500×2000 with hidden original raster and one visible replacement. No claim of a new image-generation test in this run.
+- No legacy cache files were deleted. Automatic pruning is limited to completed jobs marked by the new worker.

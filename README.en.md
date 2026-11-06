@@ -173,3 +173,12 @@ When Adapt PSD ratio changes the aspect ratio of a document with a canvas-spanni
 
 
 Ratio adaptation checks leading full-canvas stamped previews against the editable stack underneath. Only near-matching covers are hidden in the output copy so the original layered content can reflow. Hidden historical versions stay hidden; the source file is unchanged. Card groups retain their clipping relationships, and flat backgrounds adapt without image generation.
+
+
+### Audit fixes and cache management
+
+- Clipped or masked groups stay together during outpainted reflow.
+- Stamped previews use full-resolution RGBA comparison (maximum difference 2 per channel), retaining local wording, price or logo changes.
+- Single-layer PSDs support whole-image adaptation/outpainting, skipping layout analysis when there is no independent foreground.
+- Run `cache-status.cmd` to inspect storage or `clean-cache.cmd` to remove known intermediate files from completed tracked jobs. CLI: `python portable_launcher.py --cache-status` or `--clean-cache`.
+- After each job, eligible intermediates expire after 14 days or are pruned oldest first above 2 GiB. These limits apply only to intermediate cache. Generated artwork, PSD/PSB files, history, exchange outputs, unmarked legacy jobs and unfinished jobs are retained. Legacy caches are not retroactively removed.

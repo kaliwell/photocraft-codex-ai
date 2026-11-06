@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parent
 
 def main():
     os.chdir(ROOT)
+    if '--cache-status' in sys.argv or '--clean-cache' in sys.argv:
+        from photocraft_ai.cache import maintain
+        # Status is read-only; cleaning only handles completed tracked jobs.
+        print(json.dumps(maintain(ROOT/'runtime',force='--clean-cache' in sys.argv,dry_run='--clean-cache' not in sys.argv)))
+        return
     env, _ = codex_environment()
     flags = subprocess.CREATE_NO_WINDOW
     status = subprocess.run(codex_command() + ['login', 'status'], env=env, capture_output=True,

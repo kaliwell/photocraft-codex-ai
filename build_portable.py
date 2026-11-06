@@ -30,7 +30,7 @@ build_info['executable'] = 'photocraft.exe'
 assert build_info['exe_sha256'] == hashlib.sha256((output / 'native/photocraft.exe').read_bytes()).hexdigest()
 assert build_info['photocraft_version'] == '0.20.1'
 (output / 'native/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')
-for name in ('portable_launcher.py', 'README.md', 'README.en.md', 'THIRD_PARTY.md', 'VALIDATION.md', 'RELEASE_NOTES.md'):
+for name in ('portable_launcher.py', 'cache-status.cmd', 'clean-cache.cmd', 'README.md', 'README.en.md', 'THIRD_PARTY.md', 'VALIDATION.md', 'RELEASE_NOTES.md'):
     shutil.copy2(ROOT / name, output / name)
 command = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0python\\python.exe" "%~dp0portable_launcher.py" %*\r\n'
 (output / 'start.cmd').write_bytes(command.encode('utf-8'))

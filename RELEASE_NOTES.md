@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 审计修复：保护剪贴/蒙版组，收紧盖印比对，支持单层 PSD，新增中间缓存保留规则及查看/清理命令；保留生成图片、成品和旧任务。修复扩图背景无法放在原生 Background 图层下方的导入错误。
+- Audit fixes: preserve dependent groups, compare stamped previews at full resolution, support flattened PSDs, manage completed intermediate caches, and import outpainted scenes above hidden native Background backups.
+
 - 修复置顶合并预览遮挡比例自适应：对比重复盖印与原分层，仅在新副本隐藏重复盖印；保留剪贴分组，纯色背景跳过扩图。
 - Detect redundant leading stamped previews before PSD reflow, retaining them hidden in the copy; preserve clipped card groups and skip outpainting flat backgrounds.
 

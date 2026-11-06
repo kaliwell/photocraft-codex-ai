@@ -28,6 +28,14 @@ def similarity(first,second):
     return mean,close
 
 
+def duplicate_cover(first,second):
+    # Full-resolution RGBA comparison: a small changed price or logo must not
+    # disappear through thumbnail averaging or a global similarity threshold.
+    if first.size!=second.size:return False
+    diff=ImageChops.difference(first.convert('RGBA'),second.convert('RGBA'))
+    return all(high<=2 for low,high in diff.getextrema())
+
+
 def isolate_editable(bridge,target,info,full,job):
     indices=candidates(info)
     if not indices:return info,full
@@ -40,7 +48,7 @@ def isolate_editable(bridge,target,info,full,job):
         c.call('app.save',path=str(path))
         with Image.open(path) as image:underlying=image.convert('RGBA')
         mean,close=similarity(full,underlying)
-        accepted=mean<=16 and close>=.80
+        accepted=duplicate_cover(full,underlying)
         (job/'reflow-cover-check.json').write_text(json.dumps({'indices':indices,'mean_difference':mean,'matching_fraction':close,'accepted':accepted}),encoding='utf8')
         if not accepted:return info,full
         filtered=copy.deepcopy(info)

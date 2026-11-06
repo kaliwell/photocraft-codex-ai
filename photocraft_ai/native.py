@@ -89,6 +89,7 @@ class NativeWorker:
 
     def _run(self, request):
         started = time.monotonic()
+        prepared=None
         try:
             service = self.service
             if service is None:
@@ -136,6 +137,13 @@ class NativeWorker:
             self.update(busy=False, message='已取消', error=False)
         except Exception as error:
             self.update(busy=False, message=str(error), error=True)
+        finally:
+            if prepared is not None:
+                try:
+                    from .cache import complete,maintain
+                    complete(prepared.job)
+                    maintain(prepared.job.parent.parent)
+                except (OSError,TypeError,ValueError):pass
 
 
 def handler(worker: NativeWorker, token: str):

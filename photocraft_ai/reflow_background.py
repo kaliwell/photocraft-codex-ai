@@ -2,6 +2,7 @@
 import json
 import uuid
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops
+from .layer_dependencies import protected_group
 
 
 def imported_layer(before,after):
@@ -21,6 +22,7 @@ def scene_roots(info):
         nonlocal full
         for i,r in enumerate(rows):
             if not r.get('visible',True):continue
+            if protected_group(r):continue
             key=path+(i,)
             if r.get('children'):walk(r['children'],key)
             elif not editable(r) and (not path or r['kind'] in ('Fill','Adjustment') or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)) and (r['kind']!='Smart Object' or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)):

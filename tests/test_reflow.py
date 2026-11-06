@@ -17,6 +17,11 @@ class ReflowTests(unittest.TestCase):
         info={'width':1500,'height':2000,'layers':[{'kind':'Group','name':'Split scene','children':[{'kind':'Pixel','name':'分隔线','bounds':[749,0,2,2000]},{'kind':'Smart Object','name':'Photo','bounds':[750,0,750,1800],'clipped':True},{'kind':'Pixel','name':'浅灰右栏','bounds':[750,0,750,2000]},{'kind':'Pixel','name':'深灰左栏','bounds':[0,0,750,2000]}]}]}
         units,backgrounds=content_units(info)
         self.assertEqual(len(units),1)
+        self.assertEqual(len(backgrounds),0)
+        self.assertEqual(units[0]['path'],(0,))
+        # Independent panels may split only after the photo is unlinked.
+        info['layers'][0]['children'][1]['clipped']=False
+        units,backgrounds=content_units(info)
         self.assertEqual(len(backgrounds),3)
         self.assertEqual(units[0]['path'],(0,1))
     def test_extracts_content_groups_separately_from_flat_background(self):

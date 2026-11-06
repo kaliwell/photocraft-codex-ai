@@ -6,7 +6,7 @@ root = Path(__file__).resolve().parent
 destination = root / 'dist/photocraft-codex-ai-0.4.0.zip'
 destination.parent.mkdir(exist_ok=True)
 files = [root / name for name in ('README.md', 'README.en.md', 'VALIDATION.md', 'THIRD_PARTY.md', 'RELEASE_NOTES.md',
-                                 'requirements.txt', 'start.cmd', 'start-native.cmd', 'start-panel.cmd',
+                                 'requirements.txt', 'portable_launcher.py', 'cache-status.cmd', 'clean-cache.cmd', 'start.cmd', 'start-native.cmd', 'start-panel.cmd',
                                  'native-build.toml', 'build_native.py', 'export_native_patch.py', 'build_release.py')]
 for folder in ('photocraft_ai', 'vendor', 'tests', 'examples', 'native-source'):
     files.extend(p for p in (root / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
