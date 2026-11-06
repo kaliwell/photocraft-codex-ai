@@ -12,9 +12,20 @@ from PIL import Image
 
 def validate_options(value=None):
     value = {} if value is None else value
-    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style','destination','source'}:
+    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style','destination','source','text_styles'}:
         raise ValueError('Invalid PSD settings')
-    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'','destination':'new','source':'references',**value}
+    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'','destination':'new','source':'references','text_styles':{},**value}
+    text_styles=result['text_styles']
+    if not isinstance(text_styles,dict) or set(text_styles)-{'title','subtitle','body'}:raise ValueError('Invalid text styles')
+    normalized={}
+    for role,style in text_styles.items():
+        if not isinstance(style,dict) or set(style)-{'font','font_style','size'}:raise ValueError('Invalid text style')
+        style={'font':'','font_style':'','size':0,**style}
+        for key in ('font','font_style'):
+            if not isinstance(style[key],str) or len(style[key])>200 or any(ord(c)<32 for c in style[key]):raise ValueError('Invalid text style font')
+        if type(style['size']) not in (int,float) or not math.isfinite(style['size']) or not 0<=style['size']<=1000:raise ValueError('Invalid text style size')
+        normalized[role]=style
+    result['text_styles']=normalized
     if result['source'] not in ('references','layers'):raise ValueError('Invalid PSD source')
     if result['destination'] not in ('new','current'):raise ValueError('Invalid PSD destination')
     if type(result['reference_size']) is not bool:raise ValueError('Invalid reference size setting')
@@ -42,7 +53,7 @@ def validate_layout(value):
     elements=value.get('elements')
     if not isinstance(elements,list) or not 1<=len(elements)<=(600 if long_page else 150):raise ValueError('Invalid layout elements')
     value={**value,'elements':[dict(e) if isinstance(e,dict) else e for e in elements]}
-    allowed={'kind','name','group','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
+    allowed={'kind','name','group','role','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
     for e in value['elements']:
         if not isinstance(e,dict):raise ValueError('Only editable text and shapes are supported')
         # Model responses may use the settings spelling; engine commands use fontStyle.
@@ -53,6 +64,7 @@ def validate_layout(value):
         unknown=set(e)-allowed
         if unknown:raise ValueError('Unsupported layout fields: '+', '.join(sorted(map(str,unknown))))
         if 'group' in e and (not isinstance(e['group'],str) or not e['group'].strip() or len(e['group'])>80):raise ValueError('Invalid layout group name')
+        if 'role' in e and e['role'] not in ('title','subtitle','body'):raise ValueError('Invalid text role')
         if e.get('kind') not in ('text','rect','ellipse','path'):raise ValueError('Only editable text and shapes are supported')
         for k in ['x','y','width','height','size','stroke_width','radius']:
             if k in e and (type(e[k]) not in (int,float) or abs(e[k])>(65536 if long_page else 16384) or not math.isfinite(e[k])):raise ValueError('Invalid layout coordinate')
@@ -99,6 +111,7 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
         instruction+=f'\nOriginal reference: {image.width} x {image.height}. REQUIRED output canvas: {width} x {height} pixels. Recompose and reflow text, panels and borders for this target aspect ratio. Do not stretch the original design or leave an unused extension. Text size remains pixels (points at 72 DPI).'
     if options['font']:instruction+='\nUse this font family for all editable text: '+json.dumps(options['font'])
     if options['font_style']:instruction+='\nRequired font style for all text: '+json.dumps(options['font_style'])
+    instruction+='\nClassify every text element with role=title|subtitle|body. Role-specific settings override global fonts. A size of 0 means infer it from the reference; nonzero size is required pixel size. Reflow line breaks to fit these sizes. Role-specific settings: '+json.dumps(options['text_styles'],ensure_ascii=False)
     if long_page:
         instruction=instruction.replace('Maximum 150 elements, dimensions <=8192','Maximum 600 elements, width <=8192, height <=30000')
         instruction+='\nThis is a long e-commerce detail page. Optimize the visual hierarchy, typography, section spacing and consistency. Preserve factual wording; do not invent specifications or certifications. Exclude all product/photo content, leaving its area blank. Keep the full vertical section order and all useful headings and labels, not just the first screen. Additional numbered crops are consecutive vertical windows of reference 1, not separate designs. Use absolute coordinates in the full target canvas.'
@@ -142,15 +155,25 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
     value=validate_layout(decoded)
     if (value['width'],value['height'])!=(width,height):raise ValueError('Layout returned the wrong target dimensions; result retained for inspection')
     value['dpi']=options['dpi']
-    if options['font']:
-        for element in value['elements']:
-            if element['kind']=='text':
-                element['font']=options['font']
-                if options['font_style']:
-                    element['fontStyle']=options['font_style']
-                    element.pop('weight',None)
+    value=apply_text_styles(value,options)
     path=job/'layout.json';path.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
     return path
+
+
+def apply_text_styles(value,options):
+    maximum=max((e.get('size',24) for e in value['elements'] if e['kind']=='text'),default=24)
+    for element in value['elements']:
+        if element['kind']!='text':continue
+        size=element.get('size',24)
+        role=element.get('role') or ('title' if size>=maximum*.8 else 'subtitle' if size>=maximum*.5 else 'body')
+        element['role']=role
+        style=options.get('text_styles',{}).get(role,{})
+        font=style.get('font') or options.get('font')
+        face=style.get('font_style') or options.get('font_style')
+        if font:element['font']=font
+        if face:element['fontStyle']=face;element.pop('weight',None)
+        if style.get('size',0)>0:element['size']=style['size']
+    return validate_layout(value)
 
 
 def major_groups(value):

@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 文字样式支持标题、副标题、正文/小字分别设置字体、字重和像素字号（0 为自动），支持历史与批量制作。优化宽高、DPI 预设和设置分区；未保存工程的历史提示不再误报为 PSD 错误。
+- Independent title/subtitle/body families, styles and pixel sizes (0 for automatic), including history/batch support. Cleaner canvas/DPI sections and a non-error notice for unsaved-project history.
+
 - 新增多参考图批量转 PSD：逐张分析、独立新建、按源文件命名并保留大组。支持逐张进度、失败继续、取消保留已完成文件及 JSON 清单。
 - Add Batch references to PSD: independent analysis and new files per reference, source-based names, major groups, per-item progress, failure continuation and durable cancellation reports.
 

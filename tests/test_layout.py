@@ -7,6 +7,20 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_independent_text_fonts_styles_and_pixel_sizes(self):
+        from photocraft_ai.layout import apply_text_styles
+        options=validate_options({'font':'Inter','text_styles':{'title':{'font':'Arial','font_style':'Bold','size':72},'subtitle':{'font':'Georgia','font_style':'Italic','size':36},'body':{'font':'Calibri','font_style':'Regular','size':18}}})
+        value={'width':800,'height':800,'background':'#ffffff','elements':[{'kind':'text','role':role,'x':20,'y':100*(i+1),'text':role,'weight':900,'size':24} for i,role in enumerate(['title','subtitle','body'])]}
+        result=apply_text_styles(value,options)
+        self.assertEqual([(e['font'],e['fontStyle'],e['size']) for e in result['elements']],[('Arial','Bold',72),('Georgia','Italic',36),('Calibri','Regular',18)])
+        self.assertTrue(all('weight' not in e for e in result['elements']))
+
+    def test_text_style_validation_and_legacy_role_inference(self):
+        from photocraft_ai.layout import apply_text_styles
+        for style in [{'title':{'size':float('nan')}},{'body':{'size':True}},{'other':{}},{'title':{'font':'bad\nfont'}},{'body':{'size':1001}}]:
+            with self.assertRaises(ValueError):validate_options({'text_styles':style})
+        value={'width':800,'height':800,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':100*(i+1),'text':'x','size':size} for i,size in enumerate([80,48,16])]}
+        self.assertEqual([e['role'] for e in apply_text_styles(value,validate_options())['elements']],['title','subtitle','body'])
     def test_major_groups_are_bounded_and_preserve_painting_order(self):
         from photocraft_ai.layout import major_groups
         value={'height':1000,'elements':[{'kind':'text','y':i,'group':f'Section {i}','text':'x'} for i in range(100)]}

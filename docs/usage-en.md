@@ -83,6 +83,10 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+**Text hierarchy styles**: switch between Title, Subtitle and Body and small text to choose an independent font family, weight/style and pixel size. `0` or Auto size lets the reference determine size. Pixel sizes remain consistent across DPI. All three styles persist separately and apply to single, long-page and batch layouts. New analyses label text roles; older layouts infer roles from relative font size. Review line wrapping and positions after specifying large sizes.
+
+Canvas fields show width × height; DPI shortcuts use Presets. An unsaved-project history notice does not block PSD creation.
+
 **Batch conversion**: attach multiple references, expand **PSD tools**, then choose **Batch references to PSD**. Each reference is analyzed independently into a new PSD; references are not merged and the current project is not modified. Font, dimensions and DPI follow the shared settings. Enable reference dimensions to retain each image's own size. Progress shows the current index and filename; failures do not stop later items, and cancellation retains completed files.
 
 Files are written to `runtime/exchange/batch-<job-id>/`, prefixed by index and original filename. `batch-report.json` records successes, errors and pending items. Each PSD keeps editable elements and named major groups. The regular Create PSD base action still uses multiple references to produce one layout.
@@ -99,7 +103,7 @@ The unified composer keeps the prompt, generation, references and history togeth
 
 Open **PSD settings** before generating. By default the reference dimensions are used. Turn off **Use reference image dimensions** to enter target pixel width and height, or use the 1:1, 1:2, 2:1, 3:4 and 4:3 shortcuts. For example, recompose a square reference into a **1500 × 3000** portrait base. Ratio shortcuts calculate height from the current width; both dimensions remain editable afterward.
 
-Set **DPI** from 36 to 1200, with 72/150/300 shortcuts. Pixel dimensions determine image size; DPI controls print density. **Font family** uses the Type tool's searchable dropdown, including previews, recent fonts and favorites. Choose an available style beside it, such as Regular, Bold or Italic. Initial settings follow the current Type tool font and style. All generated text uses your chosen font and style; text size still follows the generated layout. Missing fonts may be substituted.
+Set **DPI** from 36 to 1200, with 72/150/300 available under Presets. Pixel dimensions determine image size; DPI controls print density. **Font family** uses the Type tool's searchable dropdown with previews, recents and favorites. Choose a role first, then select its family, face/style and size. Unconfigured roles inherit the existing font defaults. Missing fonts may be substituted.
 
 A changed aspect ratio requests recomposition of text, shapes and borders. Review the resulting OCR and layout. Limits are 8192 pixels per side and 32 million pixels total. Settings persist locally and are included in history and drafts; restoring a record restores its settings too.
 

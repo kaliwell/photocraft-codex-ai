@@ -47,6 +47,7 @@ Follow the prompt and reference, expand all PSD settings, create the base layout
 | Image/layer to PSD | Use attached references or selected layers; work in the current document or a new one |
 | Batch references to PSD | Convert each reference into its own PSD, with per-item progress and durable results/report |
 | Unified PSD settings | Font family/style, pixel dimensions, aspect ratio and DPI beside creation actions |
+| Title / subtitle / body styles | Independent family, weight/style and pixel size, with automatic sizing and batch support |
 | Named major groups | One root folder and at most eight section groups, collapsed by default; text and shapes stay editable |
 | Long detail-page bases | Read the entire page in crops and reconstruct copy, colors, shapes and borders; up to 30000 pixels tall and 32 million pixels total |
 | Cutting and clipboard export | Adjust cut lines, save JSON plans, export PNG ZIPs and copy the full canvas |

@@ -1281,7 +1281,7 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..ceef0728a
+index 000000000..f748d6ebc
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
 @@ -0,0 +1,855 @@
@@ -1451,7 +1451,7 @@ index 000000000..ceef0728a
 +            |ui| {
 +                ui.set_width(width - 20.0);
 +                if snapshot.sidebar_open {
-+                    ui.set_min_height((xf.rect.height() - 60.0).clamp(120.0, 620.0));
++                    ui.set_min_height((xf.rect.height() - 60.0).clamp(120.0, 700.0));
 +                }
 +                egui::ScrollArea::vertical().id_salt("unified-tools-scroll").max_height((xf.rect.height() - 48.0).max(100.0)).show(ui, |ui| {
 +                    let input = ui.add_enabled(
@@ -2142,7 +2142,7 @@ index 000000000..ceef0728a
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..577c1e14c
+index 000000000..1159dadd0
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
 @@ -0,0 +1,176 @@
@@ -2313,8 +2313,8 @@ index 000000000..577c1e14c
 +                    }
 +                }
 +                Err(error) => {
-+                    s.error = true;
-+                    s.message = error.clone();
++                    s.error = error != "Save the project first to store history beside the project file";
++                    s.message = if !s.error { l("History requires saving the project first; PSD creation is still available.") } else { error.clone() };
 +                    s.history_notice = error;
 +                }
 +            }
@@ -2324,15 +2324,22 @@ index 000000000..577c1e14c
 +}
 diff --git a/crates/ui-egui/src/codex_ai/layout_options.rs b/crates/ui-egui/src/codex_ai/layout_options.rs
 new file mode 100644
-index 000000000..e99ef0d4b
+index 000000000..82d37997c
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/layout_options.rs
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,173 @@
 +//! Persisted parameters for editable reference-layout reconstruction.
 +use super::{Context, PhotocraftApp, Value, l, shared};
 +use crate::tools::type_tool::{FontLibrary, families, family_picker_in, fonts_ready, style_label, styles};
 +use serde::{Deserialize, Serialize};
 +
++#[derive(Clone, Default, Serialize, Deserialize)]
++#[serde(default)]
++struct TextStyle {
++    font: String,
++    font_style: String,
++    size: f32,
++}
 +#[derive(Clone, Serialize, Deserialize)]
 +#[serde(default)]
 +struct Settings {
@@ -2344,6 +2351,7 @@ index 000000000..e99ef0d4b
 +    font_style: String,
 +    destination: String,
 +    source: String,
++    text_styles: std::collections::BTreeMap<String, TextStyle>,
 +}
 +impl Default for Settings {
 +    fn default() -> Self {
@@ -2356,6 +2364,7 @@ index 000000000..e99ef0d4b
 +            font_style: String::new(),
 +            destination: "new".into(),
 +            source: "references".into(),
++            text_styles: std::collections::BTreeMap::new(),
 +        }
 +    }
 +}
@@ -2395,21 +2404,25 @@ index 000000000..e99ef0d4b
 +}
 +pub(super) fn controls(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 +    let mut settings = settings(app);
-+    ui.label(l("Applies to Reference to PSD"));
 +    ui.horizontal_wrapped(|ui| {
++        ui.label(l("Output"));
 +        ui.selectable_value(&mut settings.destination, "new".into(), l("New document"));
 +        ui.selectable_value(&mut settings.destination, "current".into(), l("Current document"));
 +    });
 +    if settings.destination == "current" {
 +        ui.label(l("Uses current canvas dimensions and DPI. Adds layers on top; save the project when ready."));
 +    } else {
++        ui.separator();
 +        ui.checkbox(&mut settings.reference_size, l("Use reference image dimensions"));
 +        ui.add_enabled_ui(!settings.reference_size, |ui| {
-+            ui.horizontal_wrapped(|ui| {
-+                ui.label(l("Width (px)"));
-+                ui.add(egui::DragValue::new(&mut settings.width).range(1..=8192));
-+                ui.label(l("Height (px)"));
-+                ui.add(egui::DragValue::new(&mut settings.height).range(1..=8192));
++            egui::Grid::new("layout-canvas-size").spacing([12.0, 6.0]).show(ui, |ui| {
++                ui.label(l("Canvas size"));
++                ui.horizontal(|ui| {
++                    ui.add(egui::DragValue::new(&mut settings.width).range(1..=8192).suffix(" px"));
++                    ui.label("×");
++                    ui.add(egui::DragValue::new(&mut settings.height).range(1..=8192).suffix(" px"));
++                });
++                ui.end_row();
 +            });
 +            ui.horizontal_wrapped(|ui| {
 +                ui.label(l("Aspect ratio"));
@@ -2424,12 +2437,31 @@ index 000000000..e99ef0d4b
 +        ui.horizontal_wrapped(|ui| {
 +            ui.label("DPI");
 +            ui.add(egui::DragValue::new(&mut settings.dpi).range(36..=1200));
-+            for dpi in [72, 150, 300] {
-+                if ui.button(dpi.to_string()).clicked() {
-+                    settings.dpi = dpi;
++            craft_ui::ComboBox::from_id_salt("psd-dpi-presets").selected_text(l("Presets")).show_ui(ui, |ui| {
++                for dpi in [72, 150, 300] {
++                    ui.selectable_value(&mut settings.dpi, dpi, dpi.to_string());
 +                }
-+            }
++            });
 +        });
++    }
++    ui.separator();
++    ui.strong(l("Text styles"));
++    let role_id = egui::Id::unique("psd-text-style-role");
++    let mut role = ui.ctx().data_mut(|d| d.get_temp::<String>(role_id)).unwrap_or_else(|| "title".into());
++    ui.horizontal_wrapped(|ui| {
++        for (key, label) in [("title", "Title"), ("subtitle", "Subtitle"), ("body", "Body and small text")] {
++            ui.selectable_value(&mut role, key.into(), l(label));
++        }
++    });
++    ui.ctx().data_mut(|d| d.insert_temp(role_id, role.clone()));
++    let global_font = settings.font.clone();
++    let global_style = settings.font_style.clone();
++    let mut text_style = settings.text_styles.get(&role).cloned().unwrap_or_default();
++    if !text_style.font.is_empty() {
++        settings.font = text_style.font.clone();
++    }
++    if !text_style.font_style.is_empty() {
++        settings.font_style = text_style.font_style.clone();
 +    }
 +    ui.horizontal_wrapped(|ui| {
 +        ui.label(l("Font family"));
@@ -2450,8 +2482,19 @@ index 000000000..e99ef0d4b
 +            crate::widgets::dropdown(ui, "codex-layout-style", &l("Style"), &mut settings.font_style, &options_ref, 110.0);
 +        }
 +    });
-+    ui.label(l("Selected font and style apply to all PSD text layers."));
-+    ui.label(l("A different aspect ratio recomposes text and shapes for the target canvas."));
++    ui.horizontal(|ui| {
++        ui.label(l("Font size (px)"));
++        ui.add(egui::DragValue::new(&mut text_style.size).range(0.0..=1000.0));
++        if ui.button(l("Auto size")).clicked() {
++            text_style.size = 0.0;
++        }
++    });
++    ui.small(l("0 = automatic. Each text level keeps its own font, style and size."));
++    text_style.font = settings.font.clone();
++    text_style.font_style = settings.font_style.clone();
++    settings.text_styles.insert(role, text_style);
++    settings.font = global_font;
++    settings.font_style = global_style;
 +    if settings.width.saturating_mul(settings.height) > 32_000_000 {
 +        ui.colored_label(ui.visuals().error_fg_color, l("Maximum 32 million pixels"));
 +    }
@@ -2460,10 +2503,10 @@ index 000000000..e99ef0d4b
 +}
 diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
 new file mode 100644
-index 000000000..0cb949151
+index 000000000..4516e4610
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/sidebar.rs
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,92 @@
 +//! Canvas-side tools drawer; keeps the selection composer compact.
 +use super::{Context, PhotocraftApp, Rect, Status, history, l, layout_options, paste_reference, pick_references, reference_error, shared, submit, vec2};
 +pub(super) fn controls(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui) -> Vec<(String, Rect)> {
@@ -2476,6 +2519,7 @@ index 000000000..0cb949151
 +    let selected = ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::source_buttons(app, ui)).inner;
 +    let ready = if layout_options::value(app)["source"] == "layers" { selected } else { !snapshot.references.is_empty() };
 +    ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::controls(app, ui));
++    ui.separator();
 +    ui.horizontal_wrapped(|ui| {
 +        for (mode, label, id) in [("layout", "Create PSD base", "Reference to PSD"), ("detail", "Detail page base", "Detail page base")] {
 +            let b = ui.add_enabled(ready && !snapshot.busy && !snapshot.loading, egui::Button::new(l(label)));
@@ -2534,7 +2578,8 @@ index 000000000..0cb949151
 +            ui.horizontal(|ui| {
 +                for (index, reference) in snapshot.references.iter().enumerate() {
 +                    ui.vertical(|ui| {
-+                        ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
++                        let size = if snapshot.sidebar_open { 36.0 } else { 52.0 };
++                        ui.add(egui::Image::new(&reference.texture).max_size(vec2(size, size))).on_hover_text(&reference.name);
 +                        let response = ui
 +                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
 +                            .on_hover_text(l("Remove this reference image"));
@@ -2626,7 +2671,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..a8ec572d5 100644
+index ef2788221..9462b8c49 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2640,7 +2685,7 @@ index ef2788221..a8ec572d5 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,164 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,177 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2805,11 +2850,24 @@ index ef2788221..a8ec572d5 100644
 +	Batch converts each reference into a separate new PSD. Completed files are kept if cancelled.	批量模式：每张参考图独立新建 PSD；取消后已完成文件保留。
 +	Batch PSD {}/{}: {}	批量 PSD {}/{}：{}
 +	Batch PSD complete: {}/{}; {}	批量 PSD 完成：{}/{}；{}
++	Output	制作位置
++	Canvas	画布
++	Canvas size	尺寸（宽 × 高）
++	Presets	预设
++	Text styles	文字样式
++	Title	标题
++	Subtitle	副标题
++	Body and small text	正文 / 小字
++	Font size (px)	字号（像素）
++	Auto size	自动字号
++	0 = automatic. Each text level keeps its own font, style and size.	0 表示自动；各层级独立保存字体、字重和字号。
++	Create	制作
++	History requires saving the project first; PSD creation is still available.	历史记录：请先保存工程；PSD 制作仍可使用。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..db8db227b 100644
+index c0bb1a3ab..cc573b25a 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,172 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,185 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2982,6 +3040,19 @@ index c0bb1a3ab..db8db227b 100644
 +	Batch converts each reference into a separate new PSD. Completed files are kept if cancelled.	批量模式：每张参考图独立新建 PSD；取消后已完成文件保留。
 +	Batch PSD {}/{}: {}	批量 PSD {}/{}：{}
 +	Batch PSD complete: {}/{}; {}	批量 PSD 完成：{}/{}；{}
++	Output	制作位置
++	Canvas	画布
++	Canvas size	尺寸（宽 × 高）
++	Presets	预设
++	Text styles	文字样式
++	Title	标题
++	Subtitle	副标题
++	Body and small text	正文 / 小字
++	Font size (px)	字号（像素）
++	Auto size	自动字号
++	0 = automatic. Each text level keeps its own font, style and size.	0 表示自动；各层级独立保存字体、字重和字号。
++	Create	制作
++	History requires saving the project first; PSD creation is still available.	历史记录：请先保存工程；PSD 制作仍可使用。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

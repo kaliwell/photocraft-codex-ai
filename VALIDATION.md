@@ -279,3 +279,7 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Batch reference PSD conversion (2026-11-06)
 
 81 Python tests pass, including per-file isolation, failure continuation, cancellation retaining files and durable reports. Native batch button with two references creates two separate grouped PSDs. Actual five user JPGs processed sequentially into five named PSDs; all reopen at 1500x2000 with editable Type/Shape layers and bounded major groups. Original JPG hashes unchanged. Results remain in a new subfolder of the user-specified source folder; no user assets published. Desktop/clippy/wasm/layers pass. Batch polling scales with reference count and progress controls remain visible while processing new documents.
+
+## Text hierarchy styling and settings layout (2026-11-06)
+
+83 Python tests pass: role-specific fonts/styles/pixel sizes, validation, legacy size-based role inference. Native UI edits Title Arial/72px, Subtitle Georgia/36px, Body Calibri/18px independently and forwards all settings to the authenticated worker. Native PSD export/reopen at 300 DPI verifies independent family and pixel-size conversion; PSD font faces include Arial-BoldMT, Georgia-Italic and Calibri. Unified UI screenshot reviewed with visible creation buttons. Canvas controls compacted, DPI presets use native combo, unsaved history notice no longer reports a PSD error. Updated bilingual settings screenshots/GIFs; desktop/clippy/wasm/layers pass.
