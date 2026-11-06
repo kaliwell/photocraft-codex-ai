@@ -2527,7 +2527,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..1a15c015d 100644
+index ef2788221..1305021e5 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2541,7 +2541,7 @@ index ef2788221..1a15c015d 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,133 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,136 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2675,11 +2675,14 @@ index ef2788221..1a15c015d 100644
 +	A different aspect ratio recomposes text and shapes for the target canvas.	改变比例后，按目标画布重新排版文案和形状。
 +	Maximum 32 million pixels	画布最多 3200 万像素
 +	Selected font and style apply to all PSD text layers.	所选字体和样式应用于全部 PSD 文字图层。
++	Unsupported layout fields: {}	返回的底稿含有不支持的字段：{}
++	Conflicting layout font styles	返回的底稿字体样式字段冲突，结果已保留。
++	Only editable text and shapes are supported	返回的底稿含有不支持的元素，仅支持可编辑文字和形状；结果已保留。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..15fd1a597 100644
+index c0bb1a3ab..1c2c2547d 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,141 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,144 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2821,6 +2824,9 @@ index c0bb1a3ab..15fd1a597 100644
 +	A different aspect ratio recomposes text and shapes for the target canvas.	改變比例後，按目標畫布重新排版文案和形狀。
 +	Maximum 32 million pixels	畫布最多 3200 萬像素
 +	Selected font and style apply to all PSD text layers.	所選字型和樣式套用至全部 PSD 文字圖層。
++	Unsupported layout fields: {}	傳回的底稿含有不支援的欄位：{}
++	Conflicting layout font styles	傳回的底稿字型樣式欄位衝突，結果已保留。
++	Only editable text and shapes are supported	傳回的底稿含有不支援的元素，僅支援可編輯文字和形狀；結果已保留。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -3740,10 +3746,10 @@ index fd760ec71..cb606e064 100644
 +}
 diff --git a/crates/ui-egui/src/plugin_i18n.rs b/crates/ui-egui/src/plugin_i18n.rs
 new file mode 100644
-index 000000000..5b76d1f11
+index 000000000..5f8c3c44c
 --- /dev/null
 +++ b/crates/ui-egui/src/plugin_i18n.rs
-@@ -0,0 +1,211 @@
+@@ -0,0 +1,212 @@
 +//! Custom tools share the editor's active language and translation catalogs.
 +pub(crate) fn text(source: &str) -> String {
 +    translate(&canonical(source, 0), 0)
@@ -3788,6 +3794,7 @@ index 000000000..5b76d1f11
 +    if remaining.is_empty() { Some(values) } else { None }
 +}
 +const TEMPLATES: &[&str] = &[
++    "Unsupported layout fields: {}",
 +    "Reference images selected: {}",
 +    "Reference images {} +",
 +    "Cannot read reference image: {}",

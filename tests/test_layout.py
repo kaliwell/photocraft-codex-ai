@@ -7,6 +7,20 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_model_font_style_alias_is_normalized_without_mutating_response(self):
+        text={'kind':'text','x':20,'y':80,'text':'Title','font_style':'Regular'}
+        value={'width':600,'height':1200,'background':'#ffffff','elements':[text]}
+        normalized=validate_layout(value)
+        self.assertEqual(normalized['elements'][0]['fontStyle'],'Regular')
+        self.assertNotIn('font_style',normalized['elements'][0])
+        self.assertIn('font_style',text)
+        text['fontStyle']='Bold'
+        with self.assertRaisesRegex(ValueError,'Conflicting layout font styles'):validate_layout(value)
+
+    def test_unknown_fields_are_reported_and_not_silently_discarded(self):
+        value={'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title','command':'execute'}]}
+        with self.assertRaisesRegex(ValueError,'Unsupported layout fields: command'):validate_layout(value)
+
     def test_parameters_reject_invalid_dimensions_fonts_and_dpi(self):
         self.assertEqual(validate_options()['dpi'],72)
         for options in [{'width':True},{'height':0},{'width':8192,'height':8192},{'dpi':0},{'font':'bad\nfont'},{'font_style':'bad\nstyle'},{'reference_size':1},{'command':'run'}]:

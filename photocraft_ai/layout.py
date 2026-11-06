@@ -37,9 +37,18 @@ def validate_layout(value):
     if not color(value.get('background')):raise ValueError('Invalid layout background')
     elements=value.get('elements')
     if not isinstance(elements,list) or not 1<=len(elements)<=150:raise ValueError('Invalid layout elements')
+    value={**value,'elements':[dict(e) if isinstance(e,dict) else e for e in elements]}
     allowed={'kind','name','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
-    for e in elements:
-        if not isinstance(e,dict) or set(e)-allowed or e.get('kind') not in ('text','rect','ellipse','path'):raise ValueError('Only editable text and shapes are supported')
+    for e in value['elements']:
+        if not isinstance(e,dict):raise ValueError('Only editable text and shapes are supported')
+        # Model responses may use the settings spelling; engine commands use fontStyle.
+        if 'font_style' in e:
+            style=e.pop('font_style')
+            if 'fontStyle' in e and e['fontStyle']!=style:raise ValueError('Conflicting layout font styles')
+            e['fontStyle']=style
+        unknown=set(e)-allowed
+        if unknown:raise ValueError('Unsupported layout fields: '+', '.join(sorted(map(str,unknown))))
+        if e.get('kind') not in ('text','rect','ellipse','path'):raise ValueError('Only editable text and shapes are supported')
         for k in ['x','y','width','height','size','stroke_width','radius']:
             if k in e and (type(e[k]) not in (int,float) or abs(e[k])>16384 or not math.isfinite(e[k])):raise ValueError('Invalid layout coordinate')
         if e.get('stroke_width',0)<0 or e.get('radius',0)<0:raise ValueError('Invalid border size')
@@ -71,7 +80,8 @@ Do not reproduce products, people, photography, background photos, textures, scr
 Keep text wording and placement, flat background colors, geometric shapes, panels and borders.
 Return ONLY a JSON object with width,height,background (#RRGGBB),elements (bottom to top).
 Each element: kind=text|rect|ellipse|path,name,x,y; rect/ellipse also width,height,fill (#RRGGBB or null),
-optional stroke (#RRGGBB),stroke_width,radius. Text: text,size (points at 72dpi),font,color,align.
+optional stroke (#RRGGBB),stroke_width,radius. Text: text,size (points at 72dpi),font,fontStyle,color,align.
+Use exactly these field names and no additional properties. fontStyle is the named font style, e.g. Regular or Bold.
 Text weight is 100..900. For curved decorative borders use kind=path, points=[{anchor:[x,y],in:[x,y],out:[x,y]},...], closed=false; points can also be [x,y] corners. Maximum 64 points per path.
 Text x,y is its baseline anchor. Maximum 150 elements, dimensions <=8192 and <=32 million pixels.
 Use the first reference for canvas size/layout; additional references are supporting context.

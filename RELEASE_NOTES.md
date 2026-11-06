@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复 PSD 底稿因模型返回 `font_style` 而被拒绝：兼容转换为引擎使用的 `fontStyle`，不改变用户选定样式。未知字段仍拒绝，并显示具体字段；相关错误补充中文翻译。
+- Fix PSD layouts rejected when model text uses `font_style`: normalize it to engine `fontStyle` while preserving the chosen style. Unknown fields remain rejected with specific diagnostics; Chinese error translations added.
+
 - PSD 字体改用文字工具的字体家族与样式选择器，支持搜索、预览、最近使用和收藏；生成时强制使用选定字体和样式，首次沿用文字工具当前设置。
 - PSD fonts now use the Type tool's family/style picker with search, previews, recents and favorites. Generated text uses the selected family and style; initial values follow the current Type tool settings.
 
