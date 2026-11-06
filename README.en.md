@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+**PSD settings** now supports target pixel dimensions, aspect ratios, DPI and font family for reference-to-PSD reconstruction, including recomposing square references into 1:2 layouts. Settings are included in history. See the [English guide](docs/usage-en.md#6-reference-to-psd-base-layout).
+
 [中文](README.md) · [Illustrated guide](docs/usage-en.md) · [Project data paths](docs/project-data-en.md)
 
 **Native selection AI, references, long-image cutting and canvas clipboard export.**

@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 参考图转 PSD 新增参数设置：像素宽高、宽高比快捷键、DPI 与字体名称；不同比例按目标尺寸重新排版，历史/草稿包含参数。默认保持参考图尺寸与 72 DPI。
+- Reference-to-PSD settings: target pixel dimensions, ratio shortcuts, DPI and font family, with recomposition for the target canvas and parameters saved in history/drafts. Defaults retain the reference dimensions at 72 DPI.
+
 - Generated layers follow the selected layer; no selection falls back to the top.
 - Reference-to-PSD reconstructs editable text and vector base layouts without product or background photos.
 

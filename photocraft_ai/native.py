@@ -72,6 +72,9 @@ class NativeWorker:
         if mode not in ('remove','layout') and not prompt.strip():
             raise ValueError('请先输入画面描述。')
         validate_references(request.get('references',[]))
+        if mode=='layout':
+            from .layout import validate_options
+            validate_options(request.get('layout_options'))
         document=request.get('document',{})
         if not isinstance(document,dict):raise ValueError('Invalid document context')
         anchor=document.get('insertionLayer')
@@ -100,7 +103,8 @@ class NativeWorker:
                 prompt = request.get('prompt', '').strip()
                 prepared = service.prepare(mode, prompt,
                                            feather_px=0 if mode == 'generate' else 12,
-                                           references=request.get('references', []))
+                                           references=request.get('references', []),
+                                           **({'layout_options':request.get('layout_options')} if mode=='layout' else {}))
                 if 'insertionLayer' in expected:
                     prepared.active_layer=expected['insertionLayer']
             try:

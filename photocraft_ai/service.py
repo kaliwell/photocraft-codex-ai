@@ -27,6 +27,7 @@ class Prepared:
     feather_px: int = 12
     references: tuple[Path, ...] = ()
     active_layer: int | None = None
+    layout_options: dict | None = None
 
 
 def fit_dimensions(generated: Image.Image, size: tuple[int, int], *, adapt=False) -> Image.Image:
@@ -122,7 +123,10 @@ class Service:
         self.backend = backend or CodexBackend()
         self.lock = threading.Lock()
 
-    def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None) -> Prepared:
+    def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None, layout_options=None) -> Prepared:
+        if mode=='layout':
+            from .layout import validate_options
+            layout_options=validate_options(layout_options)
         if mode not in ('create', 'fill', 'remove', 'generate', 'layout'):
             raise ValueError('未知模式')
         if mode not in ('remove','layout') and not prompt.strip():
@@ -174,12 +178,12 @@ class Service:
                 'generation_size': '1024x1024' if mode in ('generate','fill','remove') else dims,
                 'references':reference_names}
         (job / 'job.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
-        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer)
+        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer,layout_options)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
         if prepared.mode=='layout':
             from .layout import generate_layout
-            return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress)
+            return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options)
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
                                      prepared.source, prepared.guide,
                                      '1024x1024' if prepared.mode in ('generate','fill','remove') else 'x'.join(map(str, prepared.size)),

@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+参考图转 PSD 底稿现支持 **PSD 设置**：自定义像素宽高、比例、DPI 和字体；可将 1:1 参考图重新排版为 1:2。参数随历史记录保存，详见[中文说明](docs/usage-zh.md#6-参考图转-psd-底稿)。
+
 [English](README.en.md) · [中文功能使用图](docs/usage-zh.md) · [工程数据路径](docs/project-data.md)
 
 **原生选区 AI、参考图、长图切割和画布复制。**

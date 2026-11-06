@@ -16,8 +16,9 @@ from .references import save_references, validate_references, MAX_BYTES, MAX_TOT
 
 class History:
     @staticmethod
-    def _fingerprint(prompt, mode, references):
+    def _fingerprint(prompt, mode, references, options=None):
         digest=hashlib.sha256(json.dumps([prompt,mode],ensure_ascii=False).encode('utf-8'))
+        if options is not None:digest.update(json.dumps(options,sort_keys=True,ensure_ascii=False).encode('utf-8'))
         for item in references:
             data=base64.b64decode(item['data'],validate=True)
             with Image.open(BytesIO(data)) as image:
@@ -79,7 +80,11 @@ class History:
             if not isinstance(prompt, str) or len(prompt)>4000 or mode not in ('fill','remove','generate','layout'):
                 raise ValueError('Invalid history draft')
             references = validate_references(request.get('references', []))
-            fingerprint=self._fingerprint(prompt,mode,references)
+            options=None
+            if request.get('layout_options') is not None:
+                from .layout import validate_options
+                options=validate_options(request['layout_options'])
+            fingerprint=self._fingerprint(prompt,mode,references,options)
             for previous in self._records():
                 if (previous['prompt']!=prompt or previous['mode']!=mode
                     or previous['names']!=[item['name'] for item in references]):
@@ -88,7 +93,7 @@ class History:
                     old=previous.get('fingerprint')
                     if old is None:
                         restored=self.restore(previous['id'])
-                        old=self._fingerprint(restored['prompt'],restored['mode'],restored['references'])
+                        old=self._fingerprint(restored['prompt'],restored['mode'],restored['references'],restored.get('layout_options'))
                     if old==fingerprint:
                         return previous['id']
                 except (OSError,ValueError,KeyError,TypeError):
@@ -104,6 +109,7 @@ class History:
                     raise ValueError('History references exceed local resource limits')
                 meta = {'id':identifier,'created':datetime.now(timezone.utc).isoformat(timespec='microseconds'),
                         'prompt':prompt,'mode':mode,'names':names,'bytes':size,'fingerprint':fingerprint}
+                if options is not None:meta['layout_options']=options
                 temporary = folder/'snapshot.tmp'
                 encoded=json.dumps(meta,ensure_ascii=False).encode('utf-8')
                 if len(encoded)>32768:
@@ -142,4 +148,8 @@ class History:
                     raise ValueError('History references exceed local resource limits')
                 refs.append({'name':name,'data':base64.b64encode(path.read_bytes()).decode('ascii')})
             validate_references(refs)
-            return {'prompt':meta['prompt'],'mode':meta['mode'],'references':refs}
+            result={'prompt':meta['prompt'],'mode':meta['mode'],'references':refs}
+            if meta.get('layout_options') is not None:
+                from .layout import validate_options
+                result['layout_options']=validate_options(meta['layout_options'])
+            return result

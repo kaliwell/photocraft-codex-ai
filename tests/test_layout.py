@@ -1,10 +1,36 @@
 import unittest
 from unittest.mock import Mock
-from photocraft_ai.layout import validate_layout
+from photocraft_ai.layout import validate_layout, validate_options, build_layout
+from pathlib import Path
+import tempfile, json
 from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_parameters_reject_invalid_dimensions_fonts_and_dpi(self):
+        self.assertEqual(validate_options()['dpi'],72)
+        for options in [{'width':True},{'height':0},{'width':8192,'height':8192},{'dpi':0},{'font':'bad\nfont'},{'reference_size':1},{'command':'run'}]:
+            with self.assertRaises(ValueError):validate_options(options)
+
+    def test_dpi_keeps_pixel_font_size_and_sets_document_resolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'layout.json'
+            path.write_text(json.dumps({'width':600,'height':1200,'dpi':300,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title','size':100,'font':'Arial'}]}))
+            bridge=Mock();bridge.exchange=root
+            build_layout(bridge,path,root)
+            bridge.client.run.assert_any_call('file.new',width=600,height=1200,resolution=300)
+            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=24.0,font='Arial')
+
+    def test_history_distinguishes_target_sizes_and_restores_settings(self):
+        from photocraft_ai.history import History
+        with tempfile.TemporaryDirectory() as directory:
+            history=History(directory)
+            request={'mode':'layout','prompt':'base','layout_options':{'reference_size':False,'width':600,'height':1200,'dpi':300,'font':'Arial'}}
+            first=history.save(request)
+            self.assertEqual(first,history.save(request))
+            self.assertEqual(history.restore(first)['layout_options']['height'],1200)
+            request['layout_options']['height']=600
+            self.assertNotEqual(first,history.save(request))
     def test_only_declarative_editable_elements_are_allowed(self):
         value={'width':640,'height':480,'background':'#ffffff','elements':[{'kind':'text','x':10,'y':30,'text':'Title','size':24}]}
         self.assertEqual(validate_layout(value),value)
