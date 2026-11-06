@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 制作位置支持“当前文件 / 新建文件”切换。当前文件沿用画布尺寸和 DPI，在顶部添加底稿，保留原图层与工程路径，由用户保存；生成期间工程改变则停止导入。
+- PSD destination switch: current or new document. Current mode preserves canvas dimensions, DPI, existing layers and project path, adding the base layout on top without automatic saving. Changed targets are rejected before import.
+
 - 修复 PSD 底稿因模型返回 `font_style` 而被拒绝：兼容转换为引擎使用的 `fontStyle`，不改变用户选定样式。未知字段仍拒绝，并显示具体字段；相关错误补充中文翻译。
 - Fix PSD layouts rejected when model text uses `font_style`: normalize it to engine `fontStyle` while preserving the chosen style. Unknown fields remain rejected with specific diagnostics; Chinese error translations added.
 

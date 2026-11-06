@@ -12,9 +12,10 @@ from PIL import Image
 
 def validate_options(value=None):
     value = {} if value is None else value
-    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style'}:
+    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style','destination'}:
         raise ValueError('Invalid PSD settings')
-    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'',**value}
+    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'','destination':'new',**value}
+    if result['destination'] not in ('new','current'):raise ValueError('Invalid PSD destination')
     if type(result['reference_size']) is not bool:raise ValueError('Invalid reference size setting')
     for key in ('width','height'):
         if type(result[key]) is not int or not 1<=result[key]<=8192:raise ValueError('PSD dimensions must be 1..8192 pixels')
@@ -133,11 +134,18 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
     return path
 
 
-def build_layout(bridge, path, job):
+def build_layout(bridge, path, job, current=False):
     value=validate_layout(json.loads(Path(path).read_text(encoding='utf-8')))
     c=bridge.client
     dpi=value.get('dpi',72)
-    c.run('file.new',width=value['width'],height=value['height'],resolution=dpi)
+    if current:
+        info=c.run('document.inspect')
+        if (info['width'],info['height'],info['resolution'])!=(value['width'],value['height'],dpi):
+            raise ValueError('Current document size changed; layout result retained')
+        layers=info.get('layers',[])
+        if layers:c.run('layer.select',layer=layers[0]['id'])
+    else:
+        c.run('file.new',width=value['width'],height=value['height'],resolution=dpi)
     c.run('shape.create',kind='rect',rect=[0,0,value['width'],value['height']],fill=value['background'],name='Base color')
     for e in value['elements']:
         if e['kind']=='text':
@@ -153,7 +161,7 @@ def build_layout(bridge, path, job):
             if e.get('stroke'):params['stroke']={'width':e.get('stroke_width',1),'fill':e['stroke']}
             if e.get('radius'):params['radii']=e['radius']
             c.run('shape.create',**params)
-    # The output is a new document. Source project and reference files remain untouched.
+    if current:return None  # Leave saving to the user; preserve the current project path.
     output=bridge.exchange/('layout-'+job.name+'.psd')
     c.call('app.save',path=str(output))
     return output

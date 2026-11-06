@@ -231,3 +231,7 @@
 - 实际失败响应使用 `font_style`，旧版误报为不支持元素；现将该字段规范为 `fontStyle`，冲突字段和未知字段仍拒绝，校验不修改原始响应。
 - 73 项 Python 测试通过，新增字段别名、冲突及未知字段诊断回归测试；桌面编译、Clippy、wasm 与分层检查通过。
 - 使用本机保留的失败响应恢复 1500×2000、72 DPI 的 PSD，重新打开后 9 个文字层可编辑、字体正确。恢复过程未再次调用模型，用户素材与恢复结果均未提交仓库。
+
+## PSD destination switch (2026-11-06)
+
+75 Python tests pass; desktop, Clippy, wasm and layers checks pass. Live native verification adds editable text/shapes to the current document without a new tab or project-path change, then verifies editable PSD roundtrip. Existing new-document behavior remains the default.

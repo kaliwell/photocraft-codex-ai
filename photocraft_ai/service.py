@@ -140,6 +140,13 @@ class Service:
         target, revision, mask, source, guide = None, None, None, None, None
         active_layer = None
         dims = tuple(map(int, size.split('x')))
+        if mode=='layout' and layout_options['destination']=='current':
+            target=self.bridge.active_image()
+            if not target:raise ValueError('Open a document before creating the layout')
+            info=target._inspect()
+            revision=self.bridge._revision(target)
+            dims=(info['width'],info['height'])
+            layout_options=validate_options({**layout_options,'reference_size':False,'width':dims[0],'height':dims[1],'dpi':round(info.get('resolution',72))})
         if mode not in ('create','layout'):
             target = self.bridge.active_image()
             if not target:
@@ -194,7 +201,14 @@ class Service:
         with self.lock:
             if prepared.mode=='layout':
                 from .layout import build_layout
-                return build_layout(b,path,prepared.job)
+                current=(prepared.layout_options or {}).get('destination')=='current'
+                if current:
+                    docs=b.documents()
+                    match=next((d for d in docs if d['index']==prepared.target.index and d['name']==prepared.target.name),None)
+                    if not match or int(match.get('revision',0))!=prepared.revision:
+                        raise RuntimeError('Current document changed; layout result retained')
+                    b.activate(prepared.target)
+                return build_layout(b,path,prepared.job,current=current)
             with Image.open(path) as image:
                 image.load()
                 if prepared.mode == 'create':

@@ -49,6 +49,8 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+**Destination**: choose **New document** (default) or **Current document** at the top of PSD settings. New document uses the size settings below and exports a separate PSD. Current document uses its existing canvas dimensions and DPI, adding the base color, text and shapes on top while keeping existing layers. It does not automatically save or change the project path; save the project or use Save As for PSD afterward. If the target changes or closes during analysis, the result is retained without importing. The destination is included in history and drafts.
+
 Open **PSD settings** before generating. By default the reference dimensions are used. Turn off **Use reference image dimensions** to enter target pixel width and height, or use the 1:1, 1:2, 2:1, 3:4 and 4:3 shortcuts. For example, recompose a square reference into a **1500 × 3000** portrait base. Ratio shortcuts calculate height from the current width; both dimensions remain editable afterward.
 
 Set **DPI** from 36 to 1200, with 72/150/300 shortcuts. Pixel dimensions determine image size; DPI controls print density. **Font family** uses the Type tool's searchable dropdown, including previews, recent fonts and favorites. Choose an available style beside it, such as Regular, Bold or Italic. Initial settings follow the current Type tool font and style. All generated text uses your chosen font and style; text size still follows the generated layout. Missing fonts may be substituted.

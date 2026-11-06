@@ -2353,10 +2353,10 @@ index 000000000..675880f17
 +}
 diff --git a/crates/ui-egui/src/codex_ai/layout_options.rs b/crates/ui-egui/src/codex_ai/layout_options.rs
 new file mode 100644
-index 000000000..24cdf79a9
+index 000000000..7c3c15982
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/layout_options.rs
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,107 @@
 +//! Persisted parameters for editable reference-layout reconstruction.
 +use super::{Context, PhotocraftApp, Value, l, shared};
 +use crate::tools::type_tool::{FontLibrary, families, family_picker_in, fonts_ready, style_label, styles};
@@ -2371,10 +2371,11 @@ index 000000000..24cdf79a9
 +    dpi: u32,
 +    font: String,
 +    font_style: String,
++    destination: String,
 +}
 +impl Default for Settings {
 +    fn default() -> Self {
-+        Self { reference_size: true, width: 1500, height: 1500, dpi: 72, font: String::new(), font_style: String::new() }
++        Self { reference_size: true, width: 1500, height: 1500, dpi: 72, font: String::new(), font_style: String::new(), destination: "new".into() }
 +    }
 +}
 +pub(super) fn value(app: &PhotocraftApp) -> Value {
@@ -2400,33 +2401,41 @@ index 000000000..24cdf79a9
 +    let mut settings = settings(app);
 +    egui::Window::new(l("PSD settings")).id(egui::Id::unique("codex-layout-settings")).open(&mut open).resizable(false).show(ctx, |ui| {
 +        ui.label(l("Applies to Reference to PSD"));
-+        ui.checkbox(&mut settings.reference_size, l("Use reference image dimensions"));
-+        ui.add_enabled_ui(!settings.reference_size, |ui| {
-+            ui.horizontal(|ui| {
-+                ui.label(l("Width (px)"));
-+                ui.add(egui::DragValue::new(&mut settings.width).range(1..=8192));
-+                ui.label(l("Height (px)"));
-+                ui.add(egui::DragValue::new(&mut settings.height).range(1..=8192));
++        ui.horizontal(|ui| {
++            ui.selectable_value(&mut settings.destination, "new".into(), l("New document"));
++            ui.selectable_value(&mut settings.destination, "current".into(), l("Current document"));
++        });
++        if settings.destination == "current" {
++            ui.label(l("Uses current canvas dimensions and DPI. Adds layers on top; save the project when ready."));
++        } else {
++            ui.checkbox(&mut settings.reference_size, l("Use reference image dimensions"));
++            ui.add_enabled_ui(!settings.reference_size, |ui| {
++                ui.horizontal(|ui| {
++                    ui.label(l("Width (px)"));
++                    ui.add(egui::DragValue::new(&mut settings.width).range(1..=8192));
++                    ui.label(l("Height (px)"));
++                    ui.add(egui::DragValue::new(&mut settings.height).range(1..=8192));
++                });
++                ui.horizontal(|ui| {
++                    ui.label(l("Aspect ratio"));
++                    for (label, w, h) in [("1:1", 1_u32, 1_u32), ("1:2", 1, 2), ("2:1", 2, 1), ("3:4", 3, 4), ("4:3", 4, 3)] {
++                        if ui.button(label).clicked() {
++                            settings.height = settings.width.saturating_mul(h).checked_div(w).unwrap_or(1).clamp(1, 8192);
++                            settings.width = settings.height.saturating_mul(w).checked_div(h).unwrap_or(1).clamp(1, 8192);
++                        }
++                    }
++                });
 +            });
 +            ui.horizontal(|ui| {
-+                ui.label(l("Aspect ratio"));
-+                for (label, w, h) in [("1:1", 1_u32, 1_u32), ("1:2", 1, 2), ("2:1", 2, 1), ("3:4", 3, 4), ("4:3", 4, 3)] {
-+                    if ui.button(label).clicked() {
-+                        settings.height = settings.width.saturating_mul(h).checked_div(w).unwrap_or(1).clamp(1, 8192);
-+                        settings.width = settings.height.saturating_mul(w).checked_div(h).unwrap_or(1).clamp(1, 8192);
++                ui.label("DPI");
++                ui.add(egui::DragValue::new(&mut settings.dpi).range(36..=1200));
++                for dpi in [72, 150, 300] {
++                    if ui.button(dpi.to_string()).clicked() {
++                        settings.dpi = dpi;
 +                    }
 +                }
 +            });
-+        });
-+        ui.horizontal(|ui| {
-+            ui.label("DPI");
-+            ui.add(egui::DragValue::new(&mut settings.dpi).range(36..=1200));
-+            for dpi in [72, 150, 300] {
-+                if ui.button(dpi.to_string()).clicked() {
-+                    settings.dpi = dpi;
-+                }
-+            }
-+        });
++        }
 +        ui.horizontal(|ui| {
 +            ui.label(l("Font family"));
 +            if fonts_ready(ui, 290.0) {
@@ -2527,7 +2536,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..1305021e5 100644
+index ef2788221..57787fb9f 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2541,7 +2550,7 @@ index ef2788221..1305021e5 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,136 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,143 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2678,11 +2687,18 @@ index ef2788221..1305021e5 100644
 +	Unsupported layout fields: {}	返回的底稿含有不支持的字段：{}
 +	Conflicting layout font styles	返回的底稿字体样式字段冲突，结果已保留。
 +	Only editable text and shapes are supported	返回的底稿含有不支持的元素，仅支持可编辑文字和形状；结果已保留。
++	New document	新建文件
++	Current document	当前文件
++	Uses current canvas dimensions and DPI. Adds layers on top; save the project when ready.	沿用当前画布尺寸和 DPI，在顶部添加图层；完成后请保存工程。
++	Layout added to current document; save the project when ready	底稿已加入当前文件，请保存工程。
++	Current document changed; layout result retained	当前工程已改变；底稿结果已保留，请重新发起任务。
++	Current document size changed; layout result retained	当前画布尺寸已改变，底稿结果已保留。
++	Open a document before creating the layout	请先打开需要制作底稿的文件。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..1c2c2547d 100644
+index c0bb1a3ab..de6e39abc 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,144 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,151 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2827,6 +2843,13 @@ index c0bb1a3ab..1c2c2547d 100644
 +	Unsupported layout fields: {}	傳回的底稿含有不支援的欄位：{}
 +	Conflicting layout font styles	傳回的底稿字型樣式欄位衝突，結果已保留。
 +	Only editable text and shapes are supported	傳回的底稿含有不支援的元素，僅支援可編輯文字和形狀；結果已保留。
++	New document	新建文件
++	Current document	当前文件
++	Uses current canvas dimensions and DPI. Adds layers on top; save the project when ready.	沿用当前画布尺寸和 DPI，在顶部添加图层；完成后请保存工程。
++	Layout added to current document; save the project when ready	底稿已加入当前文件，请保存工程。
++	Current document changed; layout result retained	当前工程已改变；底稿结果已保留，请重新发起任务。
++	Current document size changed; layout result retained	当前画布尺寸已改变，底稿结果已保留。
++	Open a document before creating the layout	请先打开需要制作底稿的文件。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

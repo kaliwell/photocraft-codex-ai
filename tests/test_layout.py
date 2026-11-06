@@ -7,6 +7,24 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_current_document_adds_layers_without_new_file_or_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'layout.json'
+            path.write_text(json.dumps({'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title'}]}))
+            bridge=Mock();bridge.client.run.return_value={'width':600,'height':1200,'resolution':72,'layers':[{'id':7}]}
+            self.assertIsNone(build_layout(bridge,path,root,current=True))
+            self.assertFalse(any(call.args[0]=='file.new' for call in bridge.client.run.call_args_list))
+            bridge.client.call.assert_not_called()
+            bridge.client.run.assert_any_call('layer.select',layer=7)
+
+    def test_current_document_rejects_size_change_before_editing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'layout.json'
+            path.write_text(json.dumps({'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title'}]}))
+            bridge=Mock();bridge.client.run.return_value={'width':300,'height':1200,'resolution':72}
+            with self.assertRaisesRegex(ValueError,'size changed'):build_layout(bridge,path,root,current=True)
+            bridge.client.run.assert_called_once_with('document.inspect')
+
     def test_model_font_style_alias_is_normalized_without_mutating_response(self):
         text={'kind':'text','x':20,'y':80,'text':'Title','font_style':'Regular'}
         value={'width':600,'height':1200,'background':'#ffffff','elements':[text]}

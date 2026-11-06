@@ -119,7 +119,7 @@ class NativeWorker:
             applied=service.apply(prepared, result)
             elapsed = time.monotonic() - started
             self.update(busy=False,
-                        message=f'PSD base layout saved: {applied}' if mode=='layout' else f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
+                        message=('Layout added to current document; save the project when ready' if applied is None else f'PSD base layout saved: {applied}') if mode=='layout' else f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
                         error=False)
         except Cancelled:
             self.update(busy=False, message='已取消', error=False)
