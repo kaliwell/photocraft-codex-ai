@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 浮动栏精简为提示词与常用 AI 操作，PSD、参考图和历史移至可展开的右侧工具栏，支持关闭、滚动、拖入和粘贴参考图。
+- Compact composer with prompt and common AI actions; PSD, references and history move to a collapsible right-side tools drawer with scrolling, image drops and clipboard paste.
+
 - PSD 底稿来源支持参考图或选中图层（可多选），独立于当前/新建文件选项。图层快照通过透明临时文档读取，不修改源图层；历史保留当时快照。
 - PSD source switch supports attached references or selected layers, independently of destination. Layer snapshots use a transparent scratch document without altering source layers; history retains the captured snapshot.
 

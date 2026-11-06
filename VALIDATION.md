@@ -247,3 +247,7 @@ Desktop, Clippy, wasm and layers checks pass. Native UI screenshot reviewed with
 ## Selected layer layout source (2026-11-06)
 
 78 Python tests and desktop/clippy/wasm/layers passed. Live native snapshot verifies selected red shape is captured while another blue layer is excluded, preserving source revision and tab count. Layer-source prepare persists one reference. Actual UI with zero attachments switches to Selected layers and completes authenticated worker -> editable PSD flow without a new remote model request. UI screenshot reviewed. History saves the frozen layer image as a reference for restoration.
+
+## Compact composer and tools sidebar (2026-11-06)
+
+Desktop build, all-targets Clippy, wasm and layers passed. Native UI verifies default collapsed sidebar hides secondary actions, opens with Tools sidebar, exposes PSD controls, completes the authenticated worker flow, and closes successfully. Compact and expanded screenshots reviewed. Composer and sidebar both participate in reference-drop and clipboard routing. No new remote generation requested.

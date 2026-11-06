@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..8144d90d3
+index 000000000..4038cdc28
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,905 @@
+@@ -0,0 +1,846 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1296,6 +1296,7 @@ index 000000000..8144d90d3
 +use crate::{PhotocraftApp, canvas::ViewXform, theme::Tokens, widgets};
 +mod history;
 +mod layout_options;
++mod sidebar;
 +
 +const MAX_REFERENCE_BYTES: usize = 64 * 1024 * 1024;
 +const MAX_REFERENCE_TOTAL: usize = 256 * 1024 * 1024;
@@ -1313,6 +1314,8 @@ index 000000000..8144d90d3
 +    message: String,
 +    error: bool,
 +    rect: Option<Rect>,
++    sidebar_rect: Option<Rect>,
++    sidebar_open: bool,
 +    input: Option<Rect>,
 +    buttons: Vec<(String, Rect)>,
 +    references: Vec<Reference>,
@@ -1348,7 +1351,7 @@ index 000000000..8144d90d3
 +    let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +    json!({"busy": state.busy, "message": state.message, "error": state.error,
 +           "referenceLoading":state.loading,"references":state.references.iter().map(|r|json!({"name":r.name,"bytes":r.bytes})).collect::<Vec<_>>(),
-+           "historyOpen":state.history_open,"history":state.history_rows,"prompt":state.current_prompt,
++           "sidebarOpen":state.sidebar_open,"sidebarRect":state.sidebar_rect.map(|r|[r.min.x,r.min.y,r.width(),r.height()]),"historyOpen":state.history_open,"history":state.history_rows,"prompt":state.current_prompt,
 +           "maskFeatherMenu": crate::layer_menu_ui::inspect_feather_menu(ctx),
 +           "rect": state.rect.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
 +           "input": state.input.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
@@ -1394,6 +1397,7 @@ index 000000000..8144d90d3
 +    {
 +        let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 +        state.rect = None;
++        state.sidebar_rect = None;
 +        state.input = None;
 +        state.buttons.clear();
 +        state.prompt_focused = false;
@@ -1420,18 +1424,29 @@ index 000000000..8144d90d3
 +    if !app.ui.dialogs.is_empty() || app.ui.shell.dialog.is_some() || app.long_cut.is_some() {
 +        return;
 +    }
-+    let Some(selection) = selection_rect(app, ctx, xf) else { return };
++    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
++    let side_buttons = sidebar::show(app, ctx, &snapshot, xf.rect);
++    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).buttons = side_buttons.clone();
++    let Some(selection) = selection_rect(app, ctx, xf) else {
++        history::show(app, ctx);
++        layout_options::show(app, ctx);
++        return;
++    };
 +    if !selection.intersects(xf.rect) || xf.rect.width() < 320.0 || xf.rect.height() < 150.0 {
 +        return;
 +    }
 +    let snapshot = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-+    let width = (xf.rect.width() - 24.0).clamp(280.0, 560.0);
-+    let size = vec2(width, (if width < 440.0 { 350.0 } else { 300.0 }) + if snapshot.references.is_empty() { 0.0 } else { 102.0 });
-+    let anchor = position(selection, xf.rect, size);
++    let mut toolbar_viewport = xf.rect;
++    if snapshot.sidebar_open && xf.rect.width() > 700.0 {
++        toolbar_viewport.max.x -= 336.0;
++    }
++    let width = (toolbar_viewport.width() - 24.0).clamp(280.0, 480.0);
++    let size = vec2(width, 116.0);
++    let anchor = position(selection, toolbar_viewport, size);
 +    let tokens = Tokens::get(ctx);
 +    let mut input_rect = None;
 +    let mut prompt_focused = false;
-+    let mut button_rects = Vec::new();
++    let mut button_rects = side_buttons;
 +    let area = egui::Area::new(egui::Id::unique("codex-ai-toolbar")).order(egui::Order::Foreground).fixed_pos(anchor).movable(false).show(ctx, |ui| {
 +        ui.set_clip_rect(xf.rect);
 +        egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).corner_radius(tokens.radius).inner_margin(10.0).show(
@@ -1447,87 +1462,8 @@ index 000000000..8144d90d3
 +                );
 +                input_rect = Some(input.rect);
 +                prompt_focused = input.has_focus();
-+                ui.label(l("Drop reference images here · Multiple images supported; limits checked by Codex"));
-+                ui.label(egui::RichText::new(l("AI editing")).strong());
-+                button_rects = actions(app, ui, &snapshot);
-+                ui.separator();
-+                ui.label(egui::RichText::new(l("PSD base layouts")).strong());
-+                let selected_ready = ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::source_buttons(app, ui)).inner;
-+                let layout_ready = if layout_options::value(app)["source"] == "layers" { selected_ready } else { !snapshot.references.is_empty() };
-+                ui.horizontal_wrapped(|ui| {
-+                    let layout = ui.add_enabled(!snapshot.busy && !snapshot.loading && layout_ready, egui::Button::new(l("Create PSD base")));
-+                    button_rects.push(("Reference to PSD".into(), layout.rect));
-+                    if layout.clicked() {
-+                        submit(app, ctx, "layout");
-+                    }
-+                    let detail = ui.add_enabled(!snapshot.busy && !snapshot.loading && layout_ready, egui::Button::new(l("Detail page base")));
-+                    button_rects.push(("Detail page base".into(), detail.rect));
-+                    if detail.clicked() {
-+                        submit(app, ctx, "detail");
-+                    }
-+                    let settings = ui.add_enabled(!snapshot.busy, egui::Button::new(l("PSD settings")));
-+                    button_rects.push(("PSD settings".into(), settings.rect));
-+                    if settings.clicked() {
-+                        status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).settings_open = true;
-+                    }
-+                });
-+                ui.separator();
-+                ui.label(egui::RichText::new(l("References and history")).strong());
-+                ui.horizontal_wrapped(|ui| {
-+                    let add = ui
-+                        .add_enabled(
-+                            !snapshot.busy && !snapshot.loading && !app.file_dialog_open(),
-+                            egui::Button::new(pt!("Reference images {} +", snapshot.references.len())),
-+                        )
-+                        .on_hover_text(l("Select multiple images; refer to reference 1, reference 2, etc. in your prompt"));
-+                    button_rects.push(("添加参考图".into(), add.rect));
-+                    if add.clicked() {
-+                        let ctx = ui.ctx().clone();
-+                        if let Err(error) = pick_references(app, &ctx) {
-+                            let state = shared(&ctx);
-+                            let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+                            state.message = error;
-+                            state.error = true;
-+                        }
-+                    }
-+                    let paste = ui
-+                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
-+                        .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
-+                    button_rects.push(("Paste reference image".into(), paste.rect));
-+                    if paste.clicked() {
-+                        let result = paste_reference(app, ctx);
-+                        if let Err(error) = result {
-+                            reference_error(ctx, error);
-+                        }
-+                    }
++                button_rects.extend(actions(app, ui, &snapshot));
 +
-+                    history::buttons(app, ui, &snapshot, &mut button_rects);
-+                });
-+                if !snapshot.references.is_empty() {
-+                    let mut remove = None;
-+                    egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
-+                        ui.horizontal(|ui| {
-+                            for (index, reference) in snapshot.references.iter().enumerate() {
-+                                ui.vertical(|ui| {
-+                                    ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
-+                                    let response = ui
-+                                        .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
-+                                        .on_hover_text(l("Remove this reference image"));
-+                                    button_rects.push((pt!("移除参考图{}", index + 1), response.rect));
-+                                    if response.clicked() {
-+                                        remove = Some(index);
-+                                    }
-+                                });
-+                            }
-+                        });
-+                    });
-+                    if let Some(index) = remove {
-+                        let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+                        state.references.remove(index);
-+                        state.message = pt!("Reference images selected: {}", state.references.len());
-+                        state.error = false;
-+                    }
-+                }
 +                if snapshot.loading {
 +                    ui.label(l("Loading reference images…"));
 +                }
@@ -1605,7 +1541,7 @@ index 000000000..8144d90d3
 +    }
 +    let targeted = {
 +        let s = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+        s.rect.is_some_and(|r| s.prompt_focused || ctx.pointer_hover_pos().is_some_and(|p| r.contains(p)))
++        s.prompt_focused || ctx.pointer_hover_pos().is_some_and(|p| s.rect.is_some_and(|r| r.contains(p)) || s.sidebar_rect.is_some_and(|r| r.contains(p)))
 +    };
 +    if !targeted || app.session.active().is_none_or(|d| d.doc.selection.is_none()) {
 +        return;
@@ -1671,6 +1607,11 @@ index 000000000..8144d90d3
 +                }
 +            }
 +        });
++        let toggle = ui.button(l("Tools sidebar"));
++        buttons.push(("Tools sidebar".into(), toggle.rect));
++        if toggle.clicked() {
++            shared(ui.ctx()).lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_open = !status.sidebar_open;
++        }
 +        if status.busy && widgets::secondary_button(ui, &l("Cancel"), 44.0).clicked() {
 +            cancel(ui.ctx());
 +        }
@@ -1812,7 +1753,7 @@ index 000000000..8144d90d3
 +    let state = shared(ctx);
 +    let on_composer = {
 +        let state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-+        state.rect.zip(at.or_else(|| ctx.pointer_hover_pos())).is_some_and(|(r, p)| r.contains(p))
++        at.or_else(|| ctx.pointer_hover_pos()).is_some_and(|p| state.rect.is_some_and(|r| r.contains(p)) || state.sidebar_rect.is_some_and(|r| r.contains(p)))
 +    };
 +    if !on_composer {
 +        return false;
@@ -2505,6 +2446,124 @@ index 000000000..095717d95
 +    app.ui.codex_layout_options = serde_json::to_value(settings).unwrap_or_default();
 +    state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).settings_open = open;
 +}
+diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
+new file mode 100644
+index 000000000..033e18123
+--- /dev/null
++++ b/crates/ui-egui/src/codex_ai/sidebar.rs
+@@ -0,0 +1,112 @@
++//! Canvas-side tools drawer; keeps the selection composer compact.
++use super::{
++    Context, PhotocraftApp, Rect, Status, Tokens, history, l, layout_options, paste_reference, pick_references, pos2, reference_error, shared, submit, vec2,
++};
++pub(super) fn show(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, viewport: Rect) -> Vec<(String, Rect)> {
++    let mut button_rects = Vec::new();
++    if !snapshot.sidebar_open {
++        return button_rects;
++    }
++    let status = shared(ctx);
++    let tokens = Tokens::get(ctx);
++    let width = (viewport.width() - 16.0).clamp(240.0, 320.0);
++    let area = egui::Area::new(egui::Id::unique("codex-tools-sidebar"))
++        .order(egui::Order::Foreground)
++        .fixed_pos(pos2(viewport.right() - width - 8.0, viewport.top() + 8.0))
++        .movable(false)
++        .show(ctx, |ui| {
++            egui::Frame::new().fill(tokens.card).stroke(egui::Stroke::new(1.0, tokens.card_border)).inner_margin(10.0).show(ui, |ui| {
++                ui.set_width(width - 20.0);
++                ui.horizontal(|ui| {
++                    ui.strong(l("Tools sidebar"));
++                    let close = ui.button(l("Close"));
++                    button_rects.push(("Close tools sidebar".into(), close.rect));
++                    if close.clicked() {
++                        status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_open = false;
++                    }
++                });
++                egui::ScrollArea::vertical().id_salt("codex-sidebar-scroll").max_height((viewport.height() - 80.0).max(80.0)).show(ui, |ui| {
++                    ui.separator();
++                    ui.label(egui::RichText::new(l("PSD base layouts")).strong());
++                    let selected_ready = ui.add_enabled_ui(!snapshot.busy && !snapshot.loading, |ui| layout_options::source_buttons(app, ui)).inner;
++                    let layout_ready = if layout_options::value(app)["source"] == "layers" { selected_ready } else { !snapshot.references.is_empty() };
++                    ui.horizontal_wrapped(|ui| {
++                        let layout = ui.add_enabled(!snapshot.busy && !snapshot.loading && layout_ready, egui::Button::new(l("Create PSD base")));
++                        button_rects.push(("Reference to PSD".into(), layout.rect));
++                        if layout.clicked() {
++                            submit(app, ctx, "layout");
++                        }
++                        let detail = ui.add_enabled(!snapshot.busy && !snapshot.loading && layout_ready, egui::Button::new(l("Detail page base")));
++                        button_rects.push(("Detail page base".into(), detail.rect));
++                        if detail.clicked() {
++                            submit(app, ctx, "detail");
++                        }
++                        let settings = ui.add_enabled(!snapshot.busy, egui::Button::new(l("PSD settings")));
++                        button_rects.push(("PSD settings".into(), settings.rect));
++                        if settings.clicked() {
++                            status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).settings_open = true;
++                        }
++                    });
++                    ui.separator();
++                    ui.label(egui::RichText::new(l("References and history")).strong());
++                    ui.horizontal_wrapped(|ui| {
++                        let add = ui
++                            .add_enabled(
++                                !snapshot.busy && !snapshot.loading && !app.file_dialog_open(),
++                                egui::Button::new(pt!("Reference images {} +", snapshot.references.len())),
++                            )
++                            .on_hover_text(l("Select multiple images; refer to reference 1, reference 2, etc. in your prompt"));
++                        button_rects.push(("添加参考图".into(), add.rect));
++                        if add.clicked() {
++                            let ctx = ui.ctx().clone();
++                            if let Err(error) = pick_references(app, &ctx) {
++                                let state = shared(&ctx);
++                                let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                                state.message = error;
++                                state.error = true;
++                            }
++                        }
++                        let paste = ui
++                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(l("Paste reference image")))
++                            .on_hover_text(l("Paste an image from the clipboard, or press Ctrl+V in the prompt"));
++                        button_rects.push(("Paste reference image".into(), paste.rect));
++                        if paste.clicked() {
++                            let result = paste_reference(app, ctx);
++                            if let Err(error) = result {
++                                reference_error(ctx, error);
++                            }
++                        }
++
++                        history::buttons(app, ui, snapshot, &mut button_rects);
++                    });
++                    if !snapshot.references.is_empty() {
++                        let mut remove = None;
++                        egui::ScrollArea::horizontal().id_salt("codex-reference-strip").max_height(90.0).show(ui, |ui| {
++                            ui.horizontal(|ui| {
++                                for (index, reference) in snapshot.references.iter().enumerate() {
++                                    ui.vertical(|ui| {
++                                        ui.add(egui::Image::new(&reference.texture).max_size(vec2(52.0, 52.0))).on_hover_text(&reference.name);
++                                        let response = ui
++                                            .add_enabled(!snapshot.busy && !snapshot.loading, egui::Button::new(pt!("{} ×", index + 1)))
++                                            .on_hover_text(l("Remove this reference image"));
++                                        button_rects.push((pt!("移除参考图{}", index + 1), response.rect));
++                                        if response.clicked() {
++                                            remove = Some(index);
++                                        }
++                                    });
++                                }
++                            });
++                        });
++                        if let Some(index) = remove {
++                            let mut state = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
++                            state.references.remove(index);
++                            state.message = pt!("Reference images selected: {}", state.references.len());
++                            state.error = false;
++                        }
++                    }
++                });
++            });
++        });
++    status.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sidebar_rect = Some(area.response.rect);
++    button_rects
++}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
 index e979d3d82..526784f8e 100644
 --- a/crates/ui-egui/src/control.rs
@@ -2577,7 +2636,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..4cf0db076 100644
+index ef2788221..e95139e23 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2591,7 +2650,7 @@ index ef2788221..4cf0db076 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,153 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,154 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2745,11 +2804,12 @@ index ef2788221..4cf0db076 100644
 +	Selected layers	选中图层
 +	Create PSD base	制作 PSD 底稿
 +	Select source layers first	请先在图层面板选择需要转为底稿的图层。
++	Tools sidebar	工具侧栏
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..c8d19813e 100644
+index c0bb1a3ab..d44b73dee 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,161 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,162 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2911,6 +2971,7 @@ index c0bb1a3ab..c8d19813e 100644
 +	Selected layers	选中图层
 +	Create PSD base	制作 PSD 底稿
 +	Select source layers first	请先在图层面板选择需要转为底稿的图层。
++	Tools sidebar	工具侧栏
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
