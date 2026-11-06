@@ -46,3 +46,15 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 - Prompts and reference snapshots remain local. References are sent only when you submit a new generation request.
 
 [Project data path rules](project-data-en.md)
+
+## 6. Reference to PSD base layout
+
+Attach a reference and choose **Reference to PSD**. Optionally describe the wording or layout to retain. The reference is analyzed into separate editable text, flat colors, rectangles, rounded rectangles, ellipses, borders and simple Bezier paths. Products, people and background photographs are excluded; the original reference is not embedded as an image layer.
+
+The result opens as a new document and is exported to `runtime/exchange/layout-<job-id>.psd`. Use **File → Save As** to choose the final project location. The source document is preserved.
+
+This is layout reconstruction, not pixel-perfect recovery. Check OCR, substituted fonts, positions and complex decorations manually. Up to 150 text/geometric elements are supported; complex illustrations, gradients and photographs are not automatically decomposed into editable objects.
+
+[Test reference](../examples/layout-base-reference.png) · [Editable PSD sample](../examples/layout-base-demo.psd)
+
+Ordinary generated results are inserted above the layer selected when the task starts. With no selected layer they go to the top, preserving the existing undoable import workflow.

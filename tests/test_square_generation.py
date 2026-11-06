@@ -32,4 +32,4 @@ class SquareGenerationTests(unittest.TestCase):
             p=Prepared(root,'generate','cat',target,3,(40,20),Image.new('L',(40,20),255),None,None,0)
             Service(bridge,root).apply(p,path)
             bridge.insert_results.assert_called_once()
-            bridge.commit.assert_called_once_with(target)
+            bridge.commit_above.assert_called_once_with(target,None)

@@ -10,6 +10,20 @@ from openfill.geometry import Rect
 
 class PhotoCraftBridge(_Bridge):
     """Keep AI mask feather as an editable native mask property."""
+    def commit_above(self, image, anchor=None):
+        self._result_anchor = anchor
+        try:
+            return super().commit(image)
+        finally:
+            self._result_anchor = None
+
+    def _copy_on_top(self, image, scratch, top):
+        anchor = getattr(self, '_result_anchor', None)
+        if anchor is None:
+            return super()._copy_on_top(image, scratch, top)
+        self.activate(image)
+        self.client.run('layer.select', layer=anchor)
+        return self._copy_in(image, scratch, top)
     def _mask_image(self, image, layer, size):
         if layer.mask_kind != 'pixels':
             return super()._mask_image(image, layer, size)

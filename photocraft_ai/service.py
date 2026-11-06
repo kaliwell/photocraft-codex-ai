@@ -26,6 +26,7 @@ class Prepared:
     guide: Path | None
     feather_px: int = 12
     references: tuple[Path, ...] = ()
+    active_layer: int | None = None
 
 
 def fit_dimensions(generated: Image.Image, size: tuple[int, int], *, adapt=False) -> Image.Image:
@@ -122,22 +123,26 @@ class Service:
         self.lock = threading.Lock()
 
     def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None) -> Prepared:
-        if mode not in ('create', 'fill', 'remove', 'generate'):
+        if mode not in ('create', 'fill', 'remove', 'generate', 'layout'):
             raise ValueError('未知模式')
-        if mode != 'remove' and not prompt.strip():
+        if mode not in ('remove','layout') and not prompt.strip():
             raise ValueError('请输入画面描述。')
         if not isinstance(feather_px, int) or not 0 <= feather_px <= 64:
             raise ValueError('边缘羽化应为 0–64 像素。')
         job = self.root / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         job.mkdir(parents=True)
         reference_paths,reference_names=save_references([] if references is None else references,job)
+        if mode=='layout' and not reference_paths:raise ValueError('Add a reference image first')
         target, revision, mask, source, guide = None, None, None, None, None
+        active_layer = None
         dims = tuple(map(int, size.split('x')))
-        if mode != 'create':
+        if mode not in ('create','layout'):
             target = self.bridge.active_image()
             if not target:
                 raise RuntimeError('请先在配套 PhotoCraft 窗口打开图片。')
             info = target._inspect()
+            if info.get('selectedLayers'):
+                active_layer = info.get('activeLayer')
             if not info.get('hasSelection'):
                 raise RuntimeError('请先使用框选或套索选择要修改的区域。')
             full, mask = self.bridge._snapshot(target)
@@ -169,9 +174,12 @@ class Service:
                 'generation_size': '1024x1024' if mode in ('generate','fill','remove') else dims,
                 'references':reference_names}
         (job / 'job.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
-        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths)
+        return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
+        if prepared.mode=='layout':
+            from .layout import generate_layout
+            return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress)
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
                                      prepared.source, prepared.guide,
                                      '1024x1024' if prepared.mode in ('generate','fill','remove') else 'x'.join(map(str, prepared.size)),
@@ -180,6 +188,9 @@ class Service:
     def apply(self, prepared: Prepared, path: Path):
         b = self.bridge
         with self.lock:
+            if prepared.mode=='layout':
+                from .layout import build_layout
+                return build_layout(b,path,prepared.job)
             with Image.open(path) as image:
                 image.load()
                 if prepared.mode == 'create':
@@ -203,5 +214,5 @@ class Service:
                              'Codex AI · ' + prepared.prompt[:40], feather=prepared.feather_px,
                              temp_dir=None, use_selection_mask=True, mask_pixels=support.tobytes())
             # No automatic mutation retry: a lost acknowledgement must not insert twice.
-            b.commit(prepared.target)
+            b.commit_above(prepared.target, prepared.active_layer)
             return prepared.target

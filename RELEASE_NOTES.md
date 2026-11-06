@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- Generated layers follow the selected layer; no selection falls back to the top.
+- Reference-to-PSD reconstructs editable text and vector base layouts without product or background photos.
+
 - Project-scoped storage: history and cutter JSON live beside each saved project under `<filename>.photocraft-data/`. See [path rules](docs/project-data.md).
 
 - 提示词与参考图历史：自动记录生成输入、保存草稿、恢复不新增记录，相同内容去重；仅恢复输入区，跨重启保留，最近 50 条且合计最多 512 MiB。

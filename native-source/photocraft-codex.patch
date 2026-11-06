@@ -1281,10 +1281,10 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..51357c71d
+index 000000000..7c8a749cd
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
-@@ -0,0 +1,864 @@
+@@ -0,0 +1,870 @@
 +//! Optional native selection toolbar. Document edits stay in the existing engine commands;
 +//! an authenticated loopback worker runs Codex without blocking egui's frame loop.
 +use crate::plugin_i18n::text as l;
@@ -1454,6 +1454,12 @@ index 000000000..51357c71d
 +                        }
 +                    }
 +                    history::buttons(app, ui, &snapshot, &mut button_rects);
++                    let layout =
++                        ui.add_enabled(!snapshot.busy && !snapshot.loading && !snapshot.references.is_empty(), egui::Button::new(l("Reference to PSD")));
++                    button_rects.push(("Reference to PSD".into(), layout.rect));
++                    if layout.clicked() {
++                        submit(app, ctx, "layout");
++                    }
 +                });
 +                if !snapshot.references.is_empty() {
 +                    let mut remove = None;
@@ -1651,7 +1657,7 @@ index 000000000..51357c71d
 +    let references: Vec<_> = state.references.iter().map(|r| json!({"name":r.name,"data":r.data.as_str()})).collect();
 +    drop(state);
 +    let request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,"references":references,
-+        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision}});
++        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision,"insertionLayer":doc.active_layer.map(|layer|layer.0)}});
 +    start(ctx, request);
 +}
 +
@@ -2151,10 +2157,10 @@ index 000000000..51357c71d
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..e9a16cdc8
+index 000000000..cb5a69ee9
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,169 @@
 +use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
 +#[cfg(not(target_arch = "wasm32"))]
 +use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
@@ -2217,6 +2223,7 @@ index 000000000..e9a16cdc8
 +                            let mode = match row.get("mode").and_then(Value::as_str) {
 +                                Some("fill") => "Fill selection",
 +                                Some("remove") => "Remove object",
++                                Some("layout") => "Reference to PSD",
 +                                _ => "Generate image",
 +                            };
 +                            ui.label(l(mode));
@@ -2395,7 +2402,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..13b23b811 100644
+index ef2788221..97029e977 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2409,7 +2416,7 @@ index ef2788221..13b23b811 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,118 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,120 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2528,11 +2535,13 @@ index ef2788221..13b23b811 100644
 +	The active project changed; reopen history	当前工程已改变，请重新打开历史
 +	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
 +	Fit full image	完整显示图片
++	Reference to PSD	参考图转 PSD 底稿
++	Analyzing reference layout	正在分析参考图版式
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..faf56cd00 100644
+index c0bb1a3ab..8bc3b0d1a 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,126 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,128 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2659,6 +2668,8 @@ index c0bb1a3ab..faf56cd00 100644
 +	The active project changed; reopen history	当前工程已改变，请重新打开历史
 +	Save the project to keep its cutting plan beside the project file	请先保存工程，切图方案将保存在工程同目录
 +	Fit full image	完整显示图片
++	Reference to PSD	参考图转 PSD 底稿
++	Analyzing reference layout	正在分析参考图版式
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

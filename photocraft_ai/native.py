@@ -67,11 +67,15 @@ class NativeWorker:
     def submit(self, request):
         mode = request.get('mode')
         prompt = request.get('prompt', '')
-        if mode not in ('fill', 'remove', 'generate') or not isinstance(prompt, str) or len(prompt) > 4000:
+        if mode not in ('fill', 'remove', 'generate','layout') or not isinstance(prompt, str) or len(prompt) > 4000:
             raise ValueError('请求参数无效。')
-        if mode != 'remove' and not prompt.strip():
+        if mode not in ('remove','layout') and not prompt.strip():
             raise ValueError('请先输入画面描述。')
         validate_references(request.get('references',[]))
+        document=request.get('document',{})
+        if not isinstance(document,dict):raise ValueError('Invalid document context')
+        anchor=document.get('insertionLayer')
+        if anchor is not None and (type(anchor) is not int or not 0<anchor<2**64):raise ValueError('Invalid insertion layer')
         with self.lock:
             if self.state['busy']:
                 raise ValueError('已有生成任务正在运行。')
@@ -97,6 +101,8 @@ class NativeWorker:
                 prepared = service.prepare(mode, prompt,
                                            feather_px=0 if mode == 'generate' else 12,
                                            references=request.get('references', []))
+                if 'insertionLayer' in expected:
+                    prepared.active_layer=expected['insertionLayer']
             try:
                 self.history_for(request).save(request)
             except Exception as error:
@@ -106,10 +112,10 @@ class NativeWorker:
             if self.cancel.is_set():
                 raise Cancelled('已取消')
             self.update(message='正在添加新图层…')
-            service.apply(prepared, result)
+            applied=service.apply(prepared, result)
             elapsed = time.monotonic() - started
             self.update(busy=False,
-                        message=f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
+                        message=f'PSD base layout saved: {applied}' if mode=='layout' else f'已生成到新图层 · 本次耗时 {elapsed:.1f} 秒 · Ctrl+Z 撤销',
                         error=False)
         except Cancelled:
             self.update(busy=False, message='已取消', error=False)
