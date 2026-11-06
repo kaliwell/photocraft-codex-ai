@@ -127,19 +127,8 @@ Ordinary generated results are inserted above the layer selected when the task s
 
 ![Grouped PSD](../examples/usage/en/psd-groups.png)
 
+## 7. Adapt existing PSD dimensions and outpaint backgrounds
 
-### Automatic PSD background outpainting
+Open an existing project, set target dimensions in the PSD drawer and choose **Adapt PSD ratio**. Save a new copy with editable layers; clipped/masked groups stay together and flattened images support outpainting. Redundant stamped covers are hidden only after full-resolution comparison.
 
-When Adapt PSD ratio changes the aspect ratio of a document with a canvas-spanning raster scene, it automatically uses the existing Codex image generator to extend that scene. No extra steps; image generation must be available. Text, logos and shapes reflow separately. Original scene/repair layers remain hidden in the copy, with an added AI outpainted background layer. Original interior scene pixels are retained with edge blending; AI-generated extensions require visual review. Failed or cancelled generation does not replace the source project.
-
-
-Ratio adaptation checks leading full-canvas stamped previews against the editable stack underneath. Only near-matching covers are hidden in the output copy so the original layered content can reflow. Hidden historical versions stay hidden; the source file is unchanged. Card groups retain their clipping relationships, and flat backgrounds adapt without image generation.
-
-
-### Audit fixes and cache management
-
-- Clipped or masked groups stay together during outpainted reflow.
-- Stamped previews use full-resolution RGBA comparison (maximum difference 2 per channel), retaining local wording, price or logo changes.
-- Single-layer PSDs support whole-image adaptation/outpainting, skipping layout analysis when there is no independent foreground.
-- Run `cache-status.cmd` to inspect storage or `clean-cache.cmd` to remove known intermediate files from completed tracked jobs. CLI: `python portable_launcher.py --cache-status` or `--clean-cache`.
-- After each job, eligible intermediates expire after 14 days or are pruned oldest first above 2 GiB. These limits apply only to intermediate cache. Generated artwork, PSD/PSB files, history, exchange outputs, unmarked legacy jobs and unfinished jobs are retained. Legacy caches are not retroactively removed.
+[Full workflow, background outpainting and cache management](psd-reflow-en.md)

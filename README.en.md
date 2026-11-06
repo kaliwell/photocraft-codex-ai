@@ -2,6 +2,8 @@
 
 [中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)
 
+**Unified development showcase · 2026-11-06**: ratio adaptation, background outpainting and the latest audit fixes. Generation, selection editing and object removal remain the main tools.
+
 **One drawer for AI editing, references and editable PSD base layouts.**
 
 ## Core features in action
@@ -38,6 +40,20 @@ These original examples were produced by actual Codex image-generation/editing r
 
 Follow the prompt and reference, expand all PSD settings, create the base layout, then reveal its named groups. Recorded in the actual application using a pre-analyzed original sample. No remote model call is made in this demonstration; animation timing does not represent generation speed.
 
+## New: adapt existing PSD dimensions
+
+**Square-to-portrait layouts, automatic background outpainting and editable layers.** Enter target dimensions in **PSD tools**, choose **Adapt PSD ratio**, and save a new PSD copy. The source stays unchanged.
+
+| Content | Current behavior |
+| --- | --- |
+| Text, shapes and smart objects | Reposition and scale uniformly, retaining layers |
+| Clipped or masked groups | Transform together, keeping photos aligned with their bases |
+| Raster backgrounds / flattened images | Outpaint when needed, keeping the original interior with edge blending |
+| Redundant leading merged previews | Compare at full resolution, hide backups and reflow the actual layers below |
+| Flat-color backgrounds | Adapt directly without image generation |
+
+[Read about ratio adaptation, outpainting and cache management →](docs/psd-reflow-en.md)
+
 ## What you can do
 
 | Feature | Workflow |
@@ -54,7 +70,7 @@ Follow the prompt and reference, expand all PSD settings, create the base layout
 | Cutting and clipboard export | Adjust cut lines, save JSON plans, export PNG ZIPs and copy the full canvas |
 | Project history | Store prompts and reference snapshots per project without creating duplicate records on restore |
 
-PSD bases exclude products, people and photographic backgrounds. Review OCR and layout manually. [Full guide](docs/usage-en.md)
+Reference-to-PSD bases reconstruct copy, shapes and borders; existing PSD ratio adaptation retains products and photography. Review both workflows manually. [Full guide](docs/usage-en.md)
 
 ## Updated interface
 
@@ -165,20 +181,3 @@ See [VALIDATION.md](VALIDATION.md) for recorded results and known testing bounda
 | [0.2.6](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.6) | Legacy portable bundle including Python, Pillow, PhotoCraft, and Codex CLI |
 | [0.2.5](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.5) | Remove extra feathering for image generation; preserve the original selection mask |
 | 0.2.4–0.2.1 | Per-plugin proxy, HTTPS error classification and timeout, local edit feathering, single-generation and latency improvements |
-
-
-### Automatic PSD background outpainting
-
-When Adapt PSD ratio changes the aspect ratio of a document with a canvas-spanning raster scene, it automatically uses the existing Codex image generator to extend that scene. No extra steps; image generation must be available. Text, logos and shapes reflow separately. Original scene/repair layers remain hidden in the copy, with an added AI outpainted background layer. Original interior scene pixels are retained with edge blending; AI-generated extensions require visual review. Failed or cancelled generation does not replace the source project.
-
-
-Ratio adaptation checks leading full-canvas stamped previews against the editable stack underneath. Only near-matching covers are hidden in the output copy so the original layered content can reflow. Hidden historical versions stay hidden; the source file is unchanged. Card groups retain their clipping relationships, and flat backgrounds adapt without image generation.
-
-
-### Audit fixes and cache management
-
-- Clipped or masked groups stay together during outpainted reflow.
-- Stamped previews use full-resolution RGBA comparison (maximum difference 2 per channel), retaining local wording, price or logo changes.
-- Single-layer PSDs support whole-image adaptation/outpainting, skipping layout analysis when there is no independent foreground.
-- Run `cache-status.cmd` to inspect storage or `clean-cache.cmd` to remove known intermediate files from completed tracked jobs. CLI: `python portable_launcher.py --cache-status` or `--clean-cache`.
-- After each job, eligible intermediates expire after 14 days or are pruned oldest first above 2 GiB. These limits apply only to intermediate cache. Generated artwork, PSD/PSB files, history, exchange outputs, unmarked legacy jobs and unfinished jobs are retained. Legacy caches are not retroactively removed.

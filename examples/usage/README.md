@@ -7,3 +7,8 @@ The poster and geometry are original project examples. No user product images, p
 ## Core AI feature recordings
 
 `generate.gif`, `fill.gif`, and `remove.gif` are independent native UI walkthroughs in each language. The original mug/cube scene and its edits were produced by actual plugin Codex calls in the Chinese session. The English session replays the recorded outputs through the same local apply pipeline; waiting is condensed. The removal selection was extended to include the complete shadow before recording the final result. No personal user artwork is used.
+
+
+## Current PSD drawer refresh
+
+The Chinese and English workflow GIFs, reference/setup stills and grouped-output stills were recaptured after the audit fixes. They now show Adapt PSD ratio alongside PSD creation and batch tools. These use the same original geometric layout fixture and a pre-analyzed response; they do not demonstrate remote outpainting or model speed. The main generation/fill/remove GIFs remain unchanged. No private test PSD/PSB files or product images are included.
