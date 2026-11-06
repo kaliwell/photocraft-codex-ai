@@ -83,6 +83,10 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+**Adapt an existing PSD ratio**: open the PSD, expand PSD tools, choose New document, disable reference dimensions and enter the target width/height or ratio. Choose **Adapt PSD ratio**. This reads the current document's layer structure and content, rather than attached references. AI positions visible content groups and scales them uniformly; named color backgrounds, gray columns and full-length dividers adapt separately. A new copy is saved to `runtime/exchange/reflow-<job-id>.psd`, preserving the source, DPI, editable text, smart objects and groups. Reconstruction font presets are not applied.
+
+Designed for layered PSDs. A single flattened layer can only be fitted uniformly, not decomposed into its internal subjects and text. Review complex masks, clipping relationships and background detection. Changed source documents are rejected before import; plans remain in the job directory. Up to 80 visible content groups are supported, within the existing pixel/dimension guards.
+
 **Text hierarchy styles**: switch between Title, Subtitle and Body and small text to choose an independent font family, weight/style and pixel size. `0` or Auto size lets the reference determine size. Pixel sizes remain consistent across DPI. All three styles persist separately and apply to single, long-page and batch layouts. New analyses label text roles; older layouts infer roles from relative font size. Review line wrapping and positions after specifying large sizes.
 
 Canvas fields show width × height; DPI shortcuts use Presets. An unsaved-project history notice does not block PSD creation.

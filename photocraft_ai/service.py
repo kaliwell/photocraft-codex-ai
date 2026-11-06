@@ -124,20 +124,21 @@ class Service:
         self.lock = threading.Lock()
 
     def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None, layout_options=None) -> Prepared:
-        if mode in ('layout','detail','batch'):
+        if mode in ('layout','detail','batch','reflow'):
             from .layout import validate_options
             layout_options=validate_options(layout_options)
+            if mode=='reflow':layout_options={**layout_options,'destination':'new','source':'references','reference_size':False}
             if mode=='batch':layout_options={**layout_options,'source':'references','destination':'new'}
             if mode=='detail':layout_options['reference_size']=True
-        if mode not in ('create', 'fill', 'remove', 'generate', 'layout', 'detail', 'batch'):
+        if mode not in ('create', 'fill', 'remove', 'generate', 'layout', 'detail', 'batch', 'reflow'):
             raise ValueError('未知模式')
-        if mode not in ('remove','layout','detail','batch') and not prompt.strip():
+        if mode not in ('remove','layout','detail','batch','reflow') and not prompt.strip():
             raise ValueError('请输入画面描述。')
         if not isinstance(feather_px, int) or not 0 <= feather_px <= 64:
             raise ValueError('边缘羽化应为 0–64 像素。')
         job = self.root / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         job.mkdir(parents=True)
-        if mode in ('layout','detail','batch') and layout_options['source']=='layers':
+        if mode in ('layout','detail','batch','reflow') and layout_options['source']=='layers':
             from .layout_source import selected_layer_reference
             references=selected_layer_reference(self.bridge)
         reference_paths,reference_names=save_references([] if references is None else references,job)
@@ -145,14 +146,25 @@ class Service:
         target, revision, mask, source, guide = None, None, None, None, None
         active_layer = None
         dims = tuple(map(int, size.split('x')))
-        if mode in ('layout','detail','batch') and layout_options['destination']=='current':
+        if mode=='reflow':
+            target=self.bridge.active_image()
+            if target is None:raise ValueError('Open a PSD before adapting its ratio')
+            info=target._inspect()
+            from .reflow import content_units,validate_workspace
+            validate_workspace(info,layout_options['width'],layout_options['height'])
+            content_units(info)
+            revision=self.bridge._revision(target)
+            full,_=self.bridge._snapshot(target)
+            source=job/'reflow-source.png';full.save(source)
+            (job/'reflow-source.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf8')
+        if mode in ('layout','detail','batch','reflow') and layout_options['destination']=='current':
             target=self.bridge.active_image()
             if not target:raise ValueError('Open a document before creating the layout')
             info=target._inspect()
             revision=self.bridge._revision(target)
             dims=(info['width'],info['height'])
             layout_options=validate_options({**layout_options,'reference_size':False,'width':dims[0],'height':dims[1],'dpi':round(info.get('resolution',72))})
-        if mode not in ('create','layout','detail','batch'):
+        if mode not in ('create','layout','detail','batch','reflow'):
             target = self.bridge.active_image()
             if not target:
                 raise RuntimeError('请先在配套 PhotoCraft 窗口打开图片。')
@@ -193,7 +205,10 @@ class Service:
         return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer,layout_options)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
-        if prepared.mode in ('layout','detail','batch'):
+        if prepared.mode=='reflow':
+            from .reflow import analyze_reflow
+            return analyze_reflow(prepared,cancel,progress)
+        if prepared.mode in ('layout','detail','batch','reflow'):
             from .layout import generate_layout
             return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options,**({'long_page':True} if prepared.mode=='detail' else {}))
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
@@ -204,7 +219,10 @@ class Service:
     def apply(self, prepared: Prepared, path: Path):
         b = self.bridge
         with self.lock:
-            if prepared.mode in ('layout','detail','batch'):
+            if prepared.mode=='reflow':
+                from .reflow import apply_reflow
+                return apply_reflow(b,prepared,path)
+            if prepared.mode in ('layout','detail','batch','reflow'):
                 from .layout import build_layout
                 current=(prepared.layout_options or {}).get('destination')=='current'
                 if current:

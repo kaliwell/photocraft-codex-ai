@@ -283,3 +283,7 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 ## Text hierarchy styling and settings layout (2026-11-06)
 
 83 Python tests pass: role-specific fonts/styles/pixel sizes, validation, legacy size-based role inference. Native UI edits Title Arial/72px, Subtitle Georgia/36px, Body Calibri/18px independently and forwards all settings to the authenticated worker. Native PSD export/reopen at 300 DPI verifies independent family and pixel-size conversion; PSD font faces include Arial-BoldMT, Georgia-Italic and Calibri. Unified UI screenshot reviewed with visible creation buttons. Canvas controls compacted, DPI presets use native combo, unsaved history notice no longer reports a PSD error. Updated bilingual settings screenshots/GIFs; desktop/clippy/wasm/layers pass.
+
+## Existing PSD ratio adaptation (2026-11-06)
+
+87 Python tests pass: grouped content extraction, bounded complete transform plans, split gray panels/dividers and invalid coordinates. Five user 1500x2000 PSDs converted to 1500x1500 copies, reopened with identical layer-kind counts and unchanged source hashes. All final previews reviewed. The split-panel case was corrected to preserve panel backgrounds/clipping, and the earlier preview archived locally. Native button/worker flow verifies a new sized copy while retaining the original document. Desktop/clippy/wasm/layers passed. User files/plans/previews remain local. Single flattened layers cannot be internally recomposed.

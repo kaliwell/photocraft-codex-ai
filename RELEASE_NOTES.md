@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 新增现有 PSD 比例自适应：分析当前文档内容，在新副本中重排区块并等比缩放，保留原文字、智能对象、分组与 DPI。纯色背景分栏和分隔线单独适配画布。
+- Adapt existing PSD ratios by analyzing current content, repositioning/uniformly scaling groups in a new copy, retaining text, smart objects, groups and DPI. Named background panels and dividers adapt separately.
+
 - PSD 文字样式支持标题、副标题、正文/小字分别设置字体、字重和像素字号（0 为自动），支持历史与批量制作。优化宽高、DPI 预设和设置分区；未保存工程的历史提示不再误报为 PSD 错误。
 - Independent title/subtitle/body families, styles and pixel sizes (0 for automatic), including history/batch support. Cleaner canvas/DPI sections and a non-error notice for unsaved-project history.
 

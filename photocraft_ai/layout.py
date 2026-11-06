@@ -125,32 +125,7 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
                 instruction+=f'\nCrop {len(crops)}: source y={top}..{min(top+step,image.height)}.'
             references=(*references,*crops)
     (job/'layout-options.json').write_text(json.dumps(options,ensure_ascii=False,indent=2),encoding='utf-8')
-    output=job/'layout-response.txt'
-    args=codex_command()+['exec','--skip-git-repo-check','--ephemeral','--color','never','--json',
-        '-c','model_reasoning_effort="medium"','-c','model_provider="photocraft_https"',
-        '-c','model_providers.photocraft_https={name="OpenAI",wire_api="responses",requires_openai_auth=true,supports_websockets=false,request_max_retries=1,stream_max_retries=1}',
-        '--sandbox','read-only','--disable','multi_agent','--disable','image_generation','-C',str(job),'-o',str(output)]
-    for reference in references:args+=['--image',str(reference)]
-    args+=['-']
-    env,_=codex_environment()
-    (job/'layout-request.txt').write_text(instruction,encoding='utf-8')
-    started=time.monotonic()
-    with (job/'layout-codex.log').open('wb') as log:
-        process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=log,stderr=log,cwd=job,env=env,
-                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-        try:
-            process.stdin.write(instruction.encode('utf-8'));process.stdin.close()
-            while process.poll() is None:
-                if cancel.wait(.25):raise Cancelled('Cancelled')
-                if time.monotonic()-started>(600 if long_page else 240):raise RuntimeError('Layout analysis timed out')
-                progress('Analyzing reference layout')
-            if process.returncode:raise RuntimeError('Layout analysis failed; see layout-codex.log')
-        finally:
-            if process.poll() is None:stop_process(process)
-    if not output.exists() or output.stat().st_size>1024*1024:raise ValueError('Missing or oversized layout response')
-    text=output.read_text(encoding='utf-8').strip()
-    if text.startswith('```'):text='\n'.join(text.splitlines()[1:-1])
-    decoded=json.loads(text)
+    decoded=analyze_json(job,references,instruction,cancel,progress,timeout=600 if long_page else 240)
     if long_page and isinstance(decoded,dict):decoded['long_page']=True
     value=validate_layout(decoded)
     if (value['width'],value['height'])!=(width,height):raise ValueError('Layout returned the wrong target dimensions; result retained for inspection')
@@ -241,3 +216,32 @@ def build_layout(bridge, path, job, current=False):
     output=bridge.exchange/('layout-'+job.name+'.psd')
     c.call('app.save',path=str(output))
     return output
+
+
+def analyze_json(job,references,instruction,cancel,progress,timeout=240):
+    output=job/'layout-response.txt'
+    args=codex_command()+['exec','--skip-git-repo-check','--ephemeral','--color','never','--json',
+        '-c','model_reasoning_effort="medium"','-c','model_provider="photocraft_https"',
+        '-c','model_providers.photocraft_https={name="OpenAI",wire_api="responses",requires_openai_auth=true,supports_websockets=false,request_max_retries=1,stream_max_retries=1}',
+        '--sandbox','read-only','--disable','multi_agent','--disable','image_generation','-C',str(job),'-o',str(output)]
+    for reference in references:args+=['--image',str(reference)]
+    args+=['-']
+    env,_=codex_environment()
+    (job/'layout-request.txt').write_text(instruction,encoding='utf-8')
+    started=time.monotonic()
+    with (job/'layout-codex.log').open('wb') as log:
+        process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=log,stderr=log,cwd=job,env=env,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        try:
+            process.stdin.write(instruction.encode('utf-8'));process.stdin.close()
+            while process.poll() is None:
+                if cancel.wait(.25):raise Cancelled('Cancelled')
+                if time.monotonic()-started>timeout:raise RuntimeError('Layout analysis timed out')
+                progress('Analyzing reference layout')
+            if process.returncode:raise RuntimeError('Layout analysis failed; see layout-codex.log')
+        finally:
+            if process.poll() is None:stop_process(process)
+    if not output.exists() or output.stat().st_size>1024*1024:raise ValueError('Missing or oversized layout response')
+    text=output.read_text(encoding='utf-8').strip()
+    if text.startswith('```'):text='\n'.join(text.splitlines()[1:-1])
+    return json.loads(text)

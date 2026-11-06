@@ -59,7 +59,7 @@ class History:
                 if (meta['id'] != folder.name or not isinstance(meta['created'], str)
                     or not isinstance(meta['prompt'],str) or not isinstance(meta['names'],list)
                     or not isinstance(meta['bytes'],int) or meta['bytes']<0
-                    or meta['mode'] not in ('fill','remove','generate','layout','detail','batch')):
+                    or meta['mode'] not in ('fill','remove','generate','layout','detail','batch','reflow')):
                     continue
                 datetime.fromisoformat(meta['created']).astimezone()
                 records.append(meta)
@@ -77,7 +77,7 @@ class History:
     def save(self, request):
         with self.lock:
             prompt, mode = request.get('prompt', ''), request.get('mode', 'generate')
-            if not isinstance(prompt, str) or len(prompt)>4000 or mode not in ('fill','remove','generate','layout','detail','batch'):
+            if not isinstance(prompt, str) or len(prompt)>4000 or mode not in ('fill','remove','generate','layout','detail','batch','reflow'):
                 raise ValueError('Invalid history draft')
             references = validate_references(request.get('references', []))
             options=None
@@ -133,7 +133,7 @@ class History:
                 raise ValueError('History metadata is too large')
             meta=json.loads((folder/'snapshot.json').read_text(encoding='utf-8'))
             if (meta['id'] != identifier or not isinstance(meta['prompt'],str) or len(meta['prompt'])>4000
-                or meta['mode'] not in ('fill','remove','generate','layout','detail','batch') or not isinstance(meta['names'],list)):
+                or meta['mode'] not in ('fill','remove','generate','layout','detail','batch','reflow') or not isinstance(meta['names'],list)):
                 raise ValueError('Invalid history metadata')
             refs=[]; total=0
             if ((folder/'references').is_symlink()

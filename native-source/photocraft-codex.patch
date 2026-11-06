@@ -1281,7 +1281,7 @@ index 12b4a8a76..55fd38064 100644
  
 diff --git a/crates/ui-egui/src/codex_ai.rs b/crates/ui-egui/src/codex_ai.rs
 new file mode 100644
-index 000000000..f748d6ebc
+index 000000000..bf44f63c4
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai.rs
 @@ -0,0 +1,855 @@
@@ -1634,7 +1634,7 @@ index 000000000..f748d6ebc
 +    drop(state);
 +    let mut request = json!({"mode": mode, "prompt": app.ui.codex_ai_prompt,"references":references,
 +        "document": {"index": app.session.active_index(), "name": doc.doc.name, "revision": doc.revision,"insertionLayer":doc.active_layer.map(|layer|layer.0)}});
-+    if mode == "layout" || mode == "detail" || mode == "batch" {
++    if mode == "layout" || mode == "detail" || mode == "batch" || mode == "reflow" {
 +        request["layout_options"] = layout_options::value(app);
 +    }
 +    start(ctx, request);
@@ -2142,10 +2142,10 @@ index 000000000..f748d6ebc
 +}
 diff --git a/crates/ui-egui/src/codex_ai/history.rs b/crates/ui-egui/src/codex_ai/history.rs
 new file mode 100644
-index 000000000..1159dadd0
+index 000000000..1309977be
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/history.rs
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,177 @@
 +use super::{Context, PhotocraftApp, Rect, Status, Value, json, l, shared};
 +#[cfg(not(target_arch = "wasm32"))]
 +use super::{MAX_REFERENCE_BYTES, MAX_REFERENCE_TOTAL};
@@ -2211,6 +2211,7 @@ index 000000000..1159dadd0
 +                                Some("layout") => "Reference to PSD",
 +                                Some("detail") => "Detail page base",
 +                                Some("batch") => "Batch references to PSD",
++                                Some("reflow") => "Adapt PSD ratio",
 +                                _ => "Generate image",
 +                            };
 +                            ui.label(l(mode));
@@ -2503,10 +2504,10 @@ index 000000000..82d37997c
 +}
 diff --git a/crates/ui-egui/src/codex_ai/sidebar.rs b/crates/ui-egui/src/codex_ai/sidebar.rs
 new file mode 100644
-index 000000000..4516e4610
+index 000000000..d5cf36266
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/sidebar.rs
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,99 @@
 +//! Canvas-side tools drawer; keeps the selection composer compact.
 +use super::{Context, PhotocraftApp, Rect, Status, history, l, layout_options, paste_reference, pick_references, reference_error, shared, submit, vec2};
 +pub(super) fn controls(app: &mut PhotocraftApp, ctx: &Context, snapshot: &Status, ui: &mut egui::Ui) -> Vec<(String, Rect)> {
@@ -2527,6 +2528,13 @@ index 000000000..4516e4610
 +            if b.clicked() {
 +                submit(app, ctx, mode);
 +            }
++        }
++        let adapt = ui
++            .add_enabled(!snapshot.busy && !snapshot.loading && app.session.active().is_some(), egui::Button::new(l("Adapt PSD ratio")))
++            .on_hover_text(l("Recompose the current PSD at the specified width and height in a new copy."));
++        buttons.push(("Adapt PSD ratio".into(), adapt.rect));
++        if adapt.clicked() {
++            submit(app, ctx, "reflow");
 +        }
 +    });
 +    let batch = ui.add_enabled(!snapshot.busy && !snapshot.loading && !snapshot.references.is_empty(), egui::Button::new(l("Batch references to PSD")));
@@ -2671,7 +2679,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..9462b8c49 100644
+index ef2788221..524da4d28 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2685,7 +2693,7 @@ index ef2788221..9462b8c49 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,177 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,182 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2863,11 +2871,16 @@ index ef2788221..9462b8c49 100644
 +	0 = automatic. Each text level keeps its own font, style and size.	0 表示自动；各层级独立保存字体、字重和字号。
 +	Create	制作
 +	History requires saving the project first; PSD creation is still available.	历史记录：请先保存工程；PSD 制作仍可使用。
++	Adapt PSD ratio	PSD 比例自适应
++	Recompose the current PSD at the specified width and height in a new copy.	按指定宽高重排当前 PSD，结果保存为新副本。
++	Open a PSD before adapting its ratio	请先打开需要调整比例的 PSD。
++	PSD reflow content falls outside the target canvas	返回的排版超出目标画布，方案已保留，请重试。
++	PSD reflow omitted content groups	返回的排版遗漏了内容区块，方案已保留。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..cc573b25a 100644
+index c0bb1a3ab..ad301ff91 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,185 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,190 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -3053,6 +3066,11 @@ index c0bb1a3ab..cc573b25a 100644
 +	0 = automatic. Each text level keeps its own font, style and size.	0 表示自动；各层级独立保存字体、字重和字号。
 +	Create	制作
 +	History requires saving the project first; PSD creation is still available.	历史记录：请先保存工程；PSD 制作仍可使用。
++	Adapt PSD ratio	PSD 比例自适应
++	Recompose the current PSD at the specified width and height in a new copy.	按指定宽高重排当前 PSD，结果保存为新副本。
++	Open a PSD before adapting its ratio	请先打开需要调整比例的 PSD。
++	PSD reflow content falls outside the target canvas	返回的排版超出目标画布，方案已保留，请重试。
++	PSD reflow omitted content groups	返回的排版遗漏了内容区块，方案已保留。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
