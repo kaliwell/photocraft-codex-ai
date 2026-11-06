@@ -51,7 +51,7 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 Open **PSD settings** before generating. By default the reference dimensions are used. Turn off **Use reference image dimensions** to enter target pixel width and height, or use the 1:1, 1:2, 2:1, 3:4 and 4:3 shortcuts. For example, recompose a square reference into a **1500 × 3000** portrait base. Ratio shortcuts calculate height from the current width; both dimensions remain editable afterward.
 
-Set **DPI** from 36 to 1200, with 72/150/300 shortcuts. Pixel dimensions determine image size; DPI controls print density. Enter an installed **Font family**, such as `Arial` or `Microsoft YaHei`, to use it for all text; leave blank to infer fonts from the reference. Missing fonts may be substituted. Text size still follows the generated layout.
+Set **DPI** from 36 to 1200, with 72/150/300 shortcuts. Pixel dimensions determine image size; DPI controls print density. **Font family** uses the Type tool's searchable dropdown, including previews, recent fonts and favorites. Choose an available style beside it, such as Regular, Bold or Italic. Initial settings follow the current Type tool font and style. All generated text uses your chosen font and style; text size still follows the generated layout. Missing fonts may be substituted.
 
 A changed aspect ratio requests recomposition of text, shapes and borders. Review the resulting OCR and layout. Limits are 8192 pixels per side and 32 million pixels total. Settings persist locally and are included in history and drafts; restoring a record restores its settings too.
 

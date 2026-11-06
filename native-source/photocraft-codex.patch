@@ -2353,12 +2353,13 @@ index 000000000..675880f17
 +}
 diff --git a/crates/ui-egui/src/codex_ai/layout_options.rs b/crates/ui-egui/src/codex_ai/layout_options.rs
 new file mode 100644
-index 000000000..98cbbd4c0
+index 000000000..24cdf79a9
 --- /dev/null
 +++ b/crates/ui-egui/src/codex_ai/layout_options.rs
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,98 @@
 +//! Persisted parameters for editable reference-layout reconstruction.
 +use super::{Context, PhotocraftApp, Value, l, shared};
++use crate::tools::type_tool::{FontLibrary, families, family_picker_in, fonts_ready, style_label, styles};
 +use serde::{Deserialize, Serialize};
 +
 +#[derive(Clone, Serialize, Deserialize)]
@@ -2369,15 +2370,26 @@ index 000000000..98cbbd4c0
 +    height: u32,
 +    dpi: u32,
 +    font: String,
++    font_style: String,
 +}
 +impl Default for Settings {
 +    fn default() -> Self {
-+        Self { reference_size: true, width: 1500, height: 1500, dpi: 72, font: String::new() }
++        Self { reference_size: true, width: 1500, height: 1500, dpi: 72, font: String::new(), font_style: String::new() }
 +    }
 +}
 +pub(super) fn value(app: &PhotocraftApp) -> Value {
-+    let settings: Settings = serde_json::from_value(app.ui.codex_layout_options.clone()).unwrap_or_default();
-+    serde_json::to_value(settings).unwrap_or_default()
++    serde_json::to_value(settings(app)).unwrap_or_default()
++}
++fn settings(app: &PhotocraftApp) -> Settings {
++    let mut settings: Settings = serde_json::from_value(app.ui.codex_layout_options.clone()).unwrap_or_default();
++    if settings.font.trim().is_empty() {
++        settings.font = app.ui.tool_options.type_font.clone();
++        settings.font_style = app.ui.tool_options.type_style.clone();
++    }
++    if settings.font_style.is_empty() {
++        settings.font_style = "Regular".into();
++    }
++    settings
 +}
 +pub(super) fn show(app: &mut PhotocraftApp, ctx: &Context) {
 +    let state = shared(ctx);
@@ -2385,7 +2397,7 @@ index 000000000..98cbbd4c0
 +    if !open {
 +        return;
 +    }
-+    let mut settings: Settings = serde_json::from_value(app.ui.codex_layout_options.clone()).unwrap_or_default();
++    let mut settings = settings(app);
 +    egui::Window::new(l("PSD settings")).id(egui::Id::unique("codex-layout-settings")).open(&mut open).resizable(false).show(ctx, |ui| {
 +        ui.label(l("Applies to Reference to PSD"));
 +        ui.checkbox(&mut settings.reference_size, l("Use reference image dimensions"));
@@ -2417,9 +2429,24 @@ index 000000000..98cbbd4c0
 +        });
 +        ui.horizontal(|ui| {
 +            ui.label(l("Font family"));
-+            ui.add(egui::TextEdit::singleline(&mut settings.font).char_limit(200).hint_text(l("Automatic (from reference)")));
++            if fonts_ready(ui, 290.0) {
++                let mut library = FontLibrary::of(app);
++                if family_picker_in(ui, "codex-layout-font", &mut settings.font, 170.0, &families(), app.session.prefs().type_.font_preview, &mut library) {
++                    let available = styles(&settings.font);
++                    if let Some(style) = library.picked_style.take().filter(|s| available.contains(s)) {
++                        settings.font_style = style;
++                    } else if !available.contains(&settings.font_style) {
++                        settings.font_style = available.first().cloned().unwrap_or_else(|| "Regular".into());
++                    }
++                    app.note_recent_font(&settings.font);
++                }
++                library.finish(app);
++                let options: Vec<(String, String)> = styles(&settings.font).into_iter().map(|s| (s.clone(), style_label(&s))).collect();
++                let options_ref: Vec<(String, &str)> = options.iter().map(|(s, label)| (s.clone(), label.as_str())).collect();
++                crate::widgets::dropdown(ui, "codex-layout-style", &l("Style"), &mut settings.font_style, &options_ref, 110.0);
++            }
 +        });
-+        ui.label(l("Use an installed font family; unavailable fonts may be substituted."));
++        ui.label(l("Selected font and style apply to all PSD text layers."));
 +        ui.label(l("A different aspect ratio recomposes text and shapes for the target canvas."));
 +        if settings.width.saturating_mul(settings.height) > 32_000_000 {
 +            ui.colored_label(ui.visuals().error_fg_color, l("Maximum 32 million pixels"));
@@ -2500,7 +2527,7 @@ index 5d060f2c6..7e72e7450 100644
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..d309b685c 100644
+index ef2788221..1a15c015d 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2514,7 +2541,7 @@ index ef2788221..d309b685c 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,132 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,133 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2647,11 +2674,12 @@ index ef2788221..d309b685c 100644
 +	Use an installed font family; unavailable fonts may be substituted.	请填写已安装的字体名称；缺失字体可能被替代。
 +	A different aspect ratio recomposes text and shapes for the target canvas.	改变比例后，按目标画布重新排版文案和形状。
 +	Maximum 32 million pixels	画布最多 3200 万像素
++	Selected font and style apply to all PSD text layers.	所选字体和样式应用于全部 PSD 文字图层。
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..492668bf5 100644
+index c0bb1a3ab..15fd1a597 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,140 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,141 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -2792,6 +2820,7 @@ index c0bb1a3ab..492668bf5 100644
 +	Use an installed font family; unavailable fonts may be substituted.	請填寫已安裝的字型名稱；缺失字型可能被替代。
 +	A different aspect ratio recomposes text and shapes for the target canvas.	改變比例後，按目標畫布重新排版文案和形狀。
 +	Maximum 32 million pixels	畫布最多 3200 萬像素
++	Selected font and style apply to all PSD text layers.	所選字型和樣式套用至全部 PSD 文字圖層。
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs

@@ -9,7 +9,7 @@ from photocraft_ai.bridge import PhotoCraftBridge
 class LayoutTests(unittest.TestCase):
     def test_parameters_reject_invalid_dimensions_fonts_and_dpi(self):
         self.assertEqual(validate_options()['dpi'],72)
-        for options in [{'width':True},{'height':0},{'width':8192,'height':8192},{'dpi':0},{'font':'bad\nfont'},{'reference_size':1},{'command':'run'}]:
+        for options in [{'width':True},{'height':0},{'width':8192,'height':8192},{'dpi':0},{'font':'bad\nfont'},{'font_style':'bad\nstyle'},{'reference_size':1},{'command':'run'}]:
             with self.assertRaises(ValueError):validate_options(options)
 
     def test_dpi_keeps_pixel_font_size_and_sets_document_resolution(self):
@@ -20,6 +20,14 @@ class LayoutTests(unittest.TestCase):
             build_layout(bridge,path,root)
             bridge.client.run.assert_any_call('file.new',width=600,height=1200,resolution=300)
             bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=24.0,font='Arial')
+
+    def test_selected_named_style_overrides_model_weight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'layout.json'
+            path.write_text(json.dumps({'width':600,'height':1200,'background':'#ffffff','elements':[{'kind':'text','x':20,'y':80,'text':'Title','size':48,'font':'Arial','fontStyle':'Bold Italic','weight':400}]}))
+            bridge=Mock();bridge.exchange=root
+            build_layout(bridge,path,root)
+            bridge.client.run.assert_any_call('type.create',x=20,y=80,text='Title',size=48.0,font='Arial',fontStyle='Bold Italic')
 
     def test_history_distinguishes_target_sizes_and_restores_settings(self):
         from photocraft_ai.history import History

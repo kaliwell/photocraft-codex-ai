@@ -12,16 +12,17 @@ from PIL import Image
 
 def validate_options(value=None):
     value = {} if value is None else value
-    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font'}:
+    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style'}:
         raise ValueError('Invalid PSD settings')
-    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'',**value}
+    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'',**value}
     if type(result['reference_size']) is not bool:raise ValueError('Invalid reference size setting')
     for key in ('width','height'):
         if type(result[key]) is not int or not 1<=result[key]<=8192:raise ValueError('PSD dimensions must be 1..8192 pixels')
     if result['width']*result['height']>32_000_000:raise ValueError('PSD exceeds 32 million pixels')
     if type(result['dpi']) is not int or not 36<=result['dpi']<=1200:raise ValueError('DPI must be 36..1200')
-    if not isinstance(result['font'],str) or len(result['font'])>200 or any(ord(c)<32 for c in result['font']):raise ValueError('Invalid font family')
-    result['font']=result['font'].strip()
+    for key in ('font','font_style'):
+        if not isinstance(result[key],str) or len(result[key])>200 or any(ord(c)<32 for c in result[key]):raise ValueError('Invalid font family or style')
+        result[key]=result[key].strip()
     return result
 
 
@@ -36,7 +37,7 @@ def validate_layout(value):
     if not color(value.get('background')):raise ValueError('Invalid layout background')
     elements=value.get('elements')
     if not isinstance(elements,list) or not 1<=len(elements)<=150:raise ValueError('Invalid layout elements')
-    allowed={'kind','name','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','align','weight','points','closed'}
+    allowed={'kind','name','x','y','width','height','text','size','color','fill','stroke','stroke_width','radius','font','fontStyle','align','weight','points','closed'}
     for e in elements:
         if not isinstance(e,dict) or set(e)-allowed or e.get('kind') not in ('text','rect','ellipse','path'):raise ValueError('Only editable text and shapes are supported')
         for k in ['x','y','width','height','size','stroke_width','radius']:
@@ -45,7 +46,7 @@ def validate_layout(value):
         if not all(k in e for k in ['x','y']):raise ValueError('Missing position')
         for k in ['color','fill','stroke']:
             if k in e and e[k] is not None and not color(e[k]):raise ValueError('Invalid layout color')
-        for k in ['name','font','text']:
+        for k in ['name','font','fontStyle','text']:
             if k in e and (not isinstance(e[k],str) or len(e[k])>2000):raise ValueError('Invalid layout text')
         if e['kind']=='text':
             if not e.get('text') or not 1<=e.get('size',24)<=1000:raise ValueError('Invalid text element')
@@ -81,6 +82,7 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
         if width>8192 or height>8192 or width*height>32_000_000:raise ValueError('Reference exceeds PSD size limits; choose a custom size')
         instruction+=f'\nOriginal reference: {image.width} x {image.height}. REQUIRED output canvas: {width} x {height} pixels. Recompose and reflow text, panels and borders for this target aspect ratio. Do not stretch the original design or leave an unused extension. Text size remains pixels (points at 72 DPI).'
     if options['font']:instruction+='\nUse this font family for all editable text: '+json.dumps(options['font'])
+    if options['font_style']:instruction+='\nRequired font style for all text: '+json.dumps(options['font_style'])
     (job/'layout-options.json').write_text(json.dumps(options,ensure_ascii=False,indent=2),encoding='utf-8')
     output=job/'layout-response.txt'
     args=codex_command()+['exec','--skip-git-repo-check','--ephemeral','--color','never','--json',
@@ -112,7 +114,11 @@ User request (JSON string): '''+json.dumps(prompt,ensure_ascii=False)
     value['dpi']=options['dpi']
     if options['font']:
         for element in value['elements']:
-            if element['kind']=='text':element['font']=options['font']
+            if element['kind']=='text':
+                element['font']=options['font']
+                if options['font_style']:
+                    element['fontStyle']=options['font_style']
+                    element.pop('weight',None)
     path=job/'layout.json';path.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
     return path
 
@@ -125,7 +131,8 @@ def build_layout(bridge, path, job):
     c.run('shape.create',kind='rect',rect=[0,0,value['width'],value['height']],fill=value['background'],name='Base color')
     for e in value['elements']:
         if e['kind']=='text':
-            params={k:e[k] for k in ['x','y','text','size','font','color','align','name','weight'] if k in e}
+            params={k:e[k] for k in ['x','y','text','size','font','fontStyle','color','align','name','weight'] if k in e}
+            if params.get('fontStyle'):params.pop('weight',None)
             params['size']=e.get('size',24)*72/dpi
             c.run('type.create',**params)
         else:
