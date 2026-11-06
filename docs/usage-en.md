@@ -49,6 +49,8 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
+Choose **Reference images** or **Selected layers** under **Layout source**, then **Create PSD base** or **Detail page base**. Layer mode composites the selected layers on the full canvas, excluding other layers and ignoring the selection crop. No attachment is required. Source layers remain unchanged; current/new destination still follows PSD settings. History stores the layer snapshot and restores it as an attached reference so later layer edits do not change the historical input.
+
 The composer groups actions into **AI editing**, **PSD base layouts**, and **References and history**. PSD settings is beside the layout actions; attachment and history controls share their own row. Long reference thumbnails show the top crop while the complete original remains attached. Hover over a saved-layout status to view its full path.
 
 **Detail page base (long images)**: attach the full page as the first reference and choose **Detail page base**. The entire page is read through numbered crops, optimizing typography hierarchy, spacing and consistency into editable text, flat colors, shapes and borders at full-page coordinates. Products and photographic backgrounds are excluded. Preserve factual wording; review OCR and layout manually. New-document mode keeps the first reference's full dimensions, ignoring the ordinary layout's custom size; current-document mode recomposes for its canvas. Font, style, DPI and destination follow PSD settings. Limits: height 30000 pixels, width 8192, area 32 million pixels and 600 elements. Analysis may take several minutes and can be cancelled. Cropped references are never embedded as output image layers.

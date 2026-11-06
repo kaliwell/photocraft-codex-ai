@@ -243,3 +243,7 @@
 ## Composer grouping (2026-11-06)
 
 Desktop, Clippy, wasm and layers checks pass. Native UI screenshot reviewed with the actual long reference: three action groups and readable top-crop thumbnail. Verified PSD settings shares the layout-action row, reference/history row is separate, and the Detail page button still completes the authenticated worker flow. Original reference payload is retained. No remote generation requested for this UI change.
+
+## Selected layer layout source (2026-11-06)
+
+78 Python tests and desktop/clippy/wasm/layers passed. Live native snapshot verifies selected red shape is captured while another blue layer is excluded, preserving source revision and tab count. Layer-source prepare persists one reference. Actual UI with zero attachments switches to Selected layers and completes authenticated worker -> editable PSD flow without a new remote model request. UI screenshot reviewed. History saves the frozen layer image as a reference for restoration.

@@ -12,9 +12,10 @@ from PIL import Image
 
 def validate_options(value=None):
     value = {} if value is None else value
-    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style','destination'}:
+    if not isinstance(value, dict) or set(value)-{'reference_size','width','height','dpi','font','font_style','destination','source'}:
         raise ValueError('Invalid PSD settings')
-    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'','destination':'new',**value}
+    result={'reference_size':True,'width':1500,'height':1500,'dpi':72,'font':'','font_style':'','destination':'new','source':'references',**value}
+    if result['source'] not in ('references','layers'):raise ValueError('Invalid PSD source')
     if result['destination'] not in ('new','current'):raise ValueError('Invalid PSD destination')
     if type(result['reference_size']) is not bool:raise ValueError('Invalid reference size setting')
     for key in ('width','height'):

@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 底稿来源支持参考图或选中图层（可多选），独立于当前/新建文件选项。图层快照通过透明临时文档读取，不修改源图层；历史保留当时快照。
+- PSD source switch supports attached references or selected layers, independently of destination. Layer snapshots use a transparent scratch document without altering source layers; history retains the captured snapshot.
+
 - AI 工具栏按 AI 编辑、PSD 底稿、参考图与历史分区，PSD 设置与制作按钮同行；按钮支持换行。长图参考缩略图显示顶部裁切预览，保存成功提示简化，悬停可查看完整路径。
 - Group the composer into AI editing, PSD base layouts, and References and history. PSD settings stays with layout actions, with wrapping controls. Long references show a readable top crop; saved-layout status is concise with the complete path on hover.
 

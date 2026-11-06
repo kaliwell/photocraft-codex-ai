@@ -2,6 +2,7 @@
 from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
+import base64
 import hmac
 import json
 import os
@@ -108,7 +109,11 @@ class NativeWorker:
                 if 'insertionLayer' in expected:
                     prepared.active_layer=expected['insertionLayer']
             try:
-                self.history_for(request).save(request)
+                history_request=request
+                if mode in ('layout','detail') and prepared.layout_options.get('source')=='layers':
+                    history_request={**request,'references':[{'name':'Selected layers.png','data':base64.b64encode(prepared.references[0].read_bytes()).decode('ascii')}],
+                                     'layout_options':{**prepared.layout_options,'source':'references'}}
+                self.history_for(request).save(history_request)
             except Exception as error:
                 self.update(history_warning=str(error))
             self.update(job=str(prepared.job))

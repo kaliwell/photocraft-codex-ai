@@ -7,6 +7,19 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_layer_source_requires_selection_before_creating_scratch(self):
+        from photocraft_ai.layout_source import selected_layer_reference
+        bridge=Mock();bridge.client.run.return_value={'selectedLayers':[]}
+        with self.assertRaisesRegex(ValueError,'Select source layers'):selected_layer_reference(bridge)
+        bridge.client.run.assert_called_once_with('document.inspect')
+
+    def test_source_choice_is_validated_and_preserved_in_history(self):
+        from photocraft_ai.history import History
+        self.assertEqual(validate_options({'source':'layers'})['source'],'layers')
+        with self.assertRaises(ValueError):validate_options({'source':'canvas-command'})
+        with tempfile.TemporaryDirectory() as directory:
+            history=History(directory);record=history.save({'mode':'layout','prompt':'test','layout_options':{'source':'layers'}})
+            self.assertEqual(history.restore(record)['layout_options']['source'],'layers')
     def test_long_page_allows_full_height_and_bottom_coordinates(self):
         value={'width':790,'height':26977,'background':'#ffffff','long_page':True,'elements':[{'kind':'text','x':20,'y':26000,'text':'Bottom specifications'}]}
         self.assertEqual(validate_layout(value)['height'],26977)

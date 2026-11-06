@@ -136,6 +136,9 @@ class Service:
             raise ValueError('边缘羽化应为 0–64 像素。')
         job = self.root / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         job.mkdir(parents=True)
+        if mode in ('layout','detail') and layout_options['source']=='layers':
+            from .layout_source import selected_layer_reference
+            references=selected_layer_reference(self.bridge)
         reference_paths,reference_names=save_references([] if references is None else references,job)
         if mode in ('layout','detail') and not reference_paths:raise ValueError('Add a reference image first')
         target, revision, mask, source, guide = None, None, None, None, None
