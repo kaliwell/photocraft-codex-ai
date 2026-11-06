@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- AI 工具栏按 AI 编辑、PSD 底稿、参考图与历史分区，PSD 设置与制作按钮同行；按钮支持换行。长图参考缩略图显示顶部裁切预览，保存成功提示简化，悬停可查看完整路径。
+- Group the composer into AI editing, PSD base layouts, and References and history. PSD settings stays with layout actions, with wrapping controls. Long references show a readable top crop; saved-layout status is concise with the complete path on hover.
+
 - 新增“详情页优化底稿”：分段读取完整长图，重建可编辑文案、底色、形状与边框，排除产品与背景照片；支持最长 30000 像素及当前/新建文件模式。
 - Add Detail page base: read full long pages through numbered crops and reconstruct editable text, colors, shapes and borders without product/background photos. Supports height up to 30000 pixels and current/new destinations.
 

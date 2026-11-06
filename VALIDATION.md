@@ -239,3 +239,7 @@
 ## Long detail page base (2026-11-06)
 
 76 Python tests, desktop build, all-targets Clippy, wasm and layers passed. Authenticated native detail-button flow verified. Actual user page (790x26977) analyzed using 12 readable crops into 125 elements including 99 text elements. Native PSD export/reopen verified dimensions, DPI, editable Type/Shape layers and selected fonts; middle and bottom UI previews reviewed. Sample PSD saved beside the original locally; user artwork and model responses are excluded from GitHub. New document keeps reference dimensions; current document uses its existing canvas.
+
+## Composer grouping (2026-11-06)
+
+Desktop, Clippy, wasm and layers checks pass. Native UI screenshot reviewed with the actual long reference: three action groups and readable top-crop thumbnail. Verified PSD settings shares the layout-action row, reference/history row is separate, and the Detail page button still completes the authenticated worker flow. Original reference payload is retained. No remote generation requested for this UI change.
