@@ -7,6 +7,13 @@ from photocraft_ai.bridge import PhotoCraftBridge
 
 
 class LayoutTests(unittest.TestCase):
+    def test_long_page_allows_full_height_and_bottom_coordinates(self):
+        value={'width':790,'height':26977,'background':'#ffffff','long_page':True,'elements':[{'kind':'text','x':20,'y':26000,'text':'Bottom specifications'}]}
+        self.assertEqual(validate_layout(value)['height'],26977)
+        with self.assertRaises(ValueError):validate_layout({**value,'long_page':False})
+        with self.assertRaises(ValueError):validate_layout({**value,'height':30001})
+        with self.assertRaises(ValueError):validate_layout({**value,'width':1500})
+        with self.assertRaises(ValueError):validate_layout({**value,'elements':[{'kind':'image','x':0,'y':0}]})
     def test_current_document_adds_layers_without_new_file_or_save(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);path=root/'layout.json'

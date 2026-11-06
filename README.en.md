@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+New **Detail page base**: analyze complete long pages through numbered crops and reconstruct editable text, shapes and borders in a long PSD, excluding products and photographs. Supports height up to 30000 pixels; see the [English guide](docs/usage-en.md).
+
 **PSD settings** now supports target pixel dimensions, aspect ratios, DPI and font family for reference-to-PSD reconstruction, including recomposing square references into 1:2 layouts. Settings are included in history. See the [English guide](docs/usage-en.md#6-reference-to-psd-base-layout).
 
 [中文](README.md) · [Illustrated guide](docs/usage-en.md) · [Project data paths](docs/project-data-en.md)

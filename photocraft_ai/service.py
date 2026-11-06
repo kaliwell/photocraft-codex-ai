@@ -124,30 +124,31 @@ class Service:
         self.lock = threading.Lock()
 
     def prepare(self, mode: str, prompt: str, size='1024x1024', *, feather_px=12, references=None, layout_options=None) -> Prepared:
-        if mode=='layout':
+        if mode in ('layout','detail'):
             from .layout import validate_options
             layout_options=validate_options(layout_options)
-        if mode not in ('create', 'fill', 'remove', 'generate', 'layout'):
+            if mode=='detail':layout_options['reference_size']=True
+        if mode not in ('create', 'fill', 'remove', 'generate', 'layout', 'detail'):
             raise ValueError('未知模式')
-        if mode not in ('remove','layout') and not prompt.strip():
+        if mode not in ('remove','layout','detail') and not prompt.strip():
             raise ValueError('请输入画面描述。')
         if not isinstance(feather_px, int) or not 0 <= feather_px <= 64:
             raise ValueError('边缘羽化应为 0–64 像素。')
         job = self.root / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         job.mkdir(parents=True)
         reference_paths,reference_names=save_references([] if references is None else references,job)
-        if mode=='layout' and not reference_paths:raise ValueError('Add a reference image first')
+        if mode in ('layout','detail') and not reference_paths:raise ValueError('Add a reference image first')
         target, revision, mask, source, guide = None, None, None, None, None
         active_layer = None
         dims = tuple(map(int, size.split('x')))
-        if mode=='layout' and layout_options['destination']=='current':
+        if mode in ('layout','detail') and layout_options['destination']=='current':
             target=self.bridge.active_image()
             if not target:raise ValueError('Open a document before creating the layout')
             info=target._inspect()
             revision=self.bridge._revision(target)
             dims=(info['width'],info['height'])
             layout_options=validate_options({**layout_options,'reference_size':False,'width':dims[0],'height':dims[1],'dpi':round(info.get('resolution',72))})
-        if mode not in ('create','layout'):
+        if mode not in ('create','layout','detail'):
             target = self.bridge.active_image()
             if not target:
                 raise RuntimeError('请先在配套 PhotoCraft 窗口打开图片。')
@@ -188,9 +189,9 @@ class Service:
         return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer,layout_options)
 
     def generate(self, prepared: Prepared, cancel: threading.Event, progress) -> Path:
-        if prepared.mode=='layout':
+        if prepared.mode in ('layout','detail'):
             from .layout import generate_layout
-            return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options)
+            return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options,**({'long_page':True} if prepared.mode=='detail' else {}))
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
                                      prepared.source, prepared.guide,
                                      '1024x1024' if prepared.mode in ('generate','fill','remove') else 'x'.join(map(str, prepared.size)),
@@ -199,7 +200,7 @@ class Service:
     def apply(self, prepared: Prepared, path: Path):
         b = self.bridge
         with self.lock:
-            if prepared.mode=='layout':
+            if prepared.mode in ('layout','detail'):
                 from .layout import build_layout
                 current=(prepared.layout_options or {}).get('destination')=='current'
                 if current:

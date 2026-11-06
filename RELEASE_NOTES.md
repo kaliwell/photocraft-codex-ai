@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 新增“详情页优化底稿”：分段读取完整长图，重建可编辑文案、底色、形状与边框，排除产品与背景照片；支持最长 30000 像素及当前/新建文件模式。
+- Add Detail page base: read full long pages through numbered crops and reconstruct editable text, colors, shapes and borders without product/background photos. Supports height up to 30000 pixels and current/new destinations.
+
 - PSD 制作位置支持“当前文件 / 新建文件”切换。当前文件沿用画布尺寸和 DPI，在顶部添加底稿，保留原图层与工程路径，由用户保存；生成期间工程改变则停止导入。
 - PSD destination switch: current or new document. Current mode preserves canvas dimensions, DPI, existing layers and project path, adding the base layout on top without automatic saving. Changed targets are rejected before import.
 

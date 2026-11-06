@@ -235,3 +235,7 @@
 ## PSD destination switch (2026-11-06)
 
 75 Python tests pass; desktop, Clippy, wasm and layers checks pass. Live native verification adds editable text/shapes to the current document without a new tab or project-path change, then verifies editable PSD roundtrip. Existing new-document behavior remains the default.
+
+## Long detail page base (2026-11-06)
+
+76 Python tests, desktop build, all-targets Clippy, wasm and layers passed. Authenticated native detail-button flow verified. Actual user page (790x26977) analyzed using 12 readable crops into 125 elements including 99 text elements. Native PSD export/reopen verified dimensions, DPI, editable Type/Shape layers and selected fonts; middle and bottom UI previews reviewed. Sample PSD saved beside the original locally; user artwork and model responses are excluded from GitHub. New document keeps reference dimensions; current document uses its existing canvas.
