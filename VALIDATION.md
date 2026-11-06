@@ -269,3 +269,9 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - Both GIFs contain five stages at 1152×720 with positive frame durations and infinite looping; file sizes are under 450 KiB each. Verified 20 Markdown image references resolve locally.
 - Full-resolution unified settings and editable named-group screenshots reviewed in both languages. Source generation uses a pre-analyzed example; README and guides disclose this and distinguish animation playback from model latency.
 - Documentation/media only; application code and release installation packages are unchanged.
+# Core AI feature demos (2026-11-06)
+
+- Actual plugin/Codex generation produces a mug/cube scene; fill changes the mug to blue; removal clears the cube and shadow. A second removal run extends the selection to include the complete shadow; only the final result is showcased.
+- Visual output reviewed. Exact image-difference bounds for both edits stay inside their selections, verifying unchanged pixels outside those regions.
+- Chinese native UI captures actual remote runs. English UI replays recorded outputs through the same local apply pipeline; this is disclosed on each page. Waiting is condensed rather than presented as generation latency.
+- Separate GIFs for all three primary features in both languages; no personal artwork included. Documentation/media only.

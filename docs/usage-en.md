@@ -4,6 +4,34 @@
 
 The showcase now reflects the current unified drawer and named groups. The older v0.4.0 ZIP predates some features.
 
+## Core features in action
+
+### 1. Generate an image
+
+Enter a prompt on a blank canvas. The generated still life is added as a new layer.
+
+![English: generate a mug and red cube from a blank canvas](../examples/usage/en/generate.gif)
+
+[View still result](../examples/usage/en/generate-result.png)
+
+### 2. Edit a selected area
+
+Select the white mug and change it to blue while preserving the red cube and the background outside the selection.
+
+![English: select the mug and change only its color](../examples/usage/en/fill.gif)
+
+[View still result](../examples/usage/en/fill-result.png)
+
+### 3. Remove an object
+
+Select the red cube and its shadow, remove them and fill the tabletop naturally while retaining the mug.
+
+![English: remove the red cube and fill the background](../examples/usage/en/remove.gif)
+
+[View still result](../examples/usage/en/remove-result.png)
+
+These original examples were produced by actual Codex image-generation/editing requests through the plugin. Waiting is condensed; the English recording replays the same generated outputs through the local workflow. Playback duration does not represent model latency.
+
 ## Animated walkthrough
 
 ![English workflow animation](../examples/usage/en/workflow.gif)

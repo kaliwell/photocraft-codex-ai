@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 中英文主页优先展示三项主要功能：基本生图、局部修改和移除物体，各有独立 GIF。自制场景实际经过插件 Codex 生图/编辑；英文版重放相同结果，动图压缩等待过程。
+- Lead both showcases with separate Generate, Edit selection and Remove object GIFs. Original examples were generated/edited through the actual plugin; English replays the same outputs and waiting is condensed.
+
 - GitHub 中英文主页和指南更新：分语言动态 GIF、当前单抽屉设置截图、命名大组示例与功能表；演示使用预先分析的自制示例，不代表远程生成速度。
 - Refresh separate Chinese/English GitHub showcases with animated GIFs, unified settings screenshots, named-group examples and feature tables. Demonstrations use a pre-analyzed original sample rather than measuring remote generation speed.
 

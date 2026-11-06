@@ -4,7 +4,35 @@
 
 **一个抽屉，完成 AI 编辑、参考图和可编辑 PSD 底稿制作。**
 
-## 功能动态演示
+## 核心功能动态演示
+
+### 1. 基本生图
+
+输入提示词，从空白画布生成静物场景，结果自动加入新图层。
+
+![中文：空白画布生成杯子与红色方块](examples/usage/zh-hans/generate.gif)
+
+[查看静态结果](examples/usage/zh-hans/generate-result.png)
+
+### 2. 局部修改
+
+框选白色杯子，将它改为蓝色；右侧方块与选区外背景保持不变。
+
+![中文：框选杯子并局部改为蓝色](examples/usage/zh-hans/fill.gif)
+
+[查看静态结果](examples/usage/zh-hans/fill-result.png)
+
+### 3. 移除物体
+
+框选右侧红色方块及其阴影，移除后自然补全桌面，保留左侧杯子。
+
+![中文：移除红色方块并补全背景](examples/usage/zh-hans/remove.gif)
+
+[查看静态结果](examples/usage/zh-hans/remove-result.png)
+
+以上为插件实际调用 Codex 生图/编辑得到的自制场景。动图压缩了等待过程；英文版使用同一组已生成结果重放本地操作，播放时长不代表生成速度。
+
+## 更多功能：PSD 底稿
 
 ![中文动态演示：参考图、单抽屉设置、PSD 制作与命名分组](examples/usage/zh-hans/workflow.gif)
 
