@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复局部修改返回图的小幅构图偏移：基于未修改上下文校正位置/缩放，保持一次采样；新增可靠性检查，失败保留结果并拒绝自动导入。Windows 开发版包含 NumPy 与 OpenCV headless 对齐依赖。
+- Register selection-edit returns against unchanged context, preserving single-pass sampling; reject unreliable alignment and retain raw results. Bundle NumPy/OpenCV headless dependencies.
+
 - 修复局部修改/移除物体的细节损失：选区加上下文取样，最长 1536 像素；返回原图直接裁切，一次适配；兼容旧任务，保留选区外像素。
 - Preserve detail in fill/remove with selection-local references and single-pass mapping from raw returned pixels; legacy edit maps remain supported.
 

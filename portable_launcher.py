@@ -23,8 +23,9 @@ def main():
                             creationflags=flags)
     if '--check' in sys.argv:
         from PIL import Image
+        import cv2,numpy
         from photocraft_ai.native import NativeWorker
-        print(json.dumps({'python': sys.version.split()[0], 'pillow': Image.__version__,
+        print(json.dumps({'python': sys.version.split()[0], 'pillow': Image.__version__, 'opencv':cv2.__version__, 'numpy':numpy.__version__,
                           'codex': subprocess.check_output(codex_command() + ['--version'], env=env,
                                                           creationflags=flags, text=True).strip(),
                           'logged_in': status.returncode == 0}))

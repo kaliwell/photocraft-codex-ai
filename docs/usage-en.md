@@ -139,3 +139,10 @@ Open an existing project, set target dimensions in the PSD drawer and choose **A
 Fill and remove use a selection-local crop with surrounding context, retaining native pixels where possible. References are bounded to 1536 pixels per edge with an explicit map back to the canvas. Returned pixels are cropped directly at their original resolution and resampled once, removing the intermediate 1024-pixel downscale. Only the original selection is replaced; editable feathering and undo remain available. Legacy letterbox mappings are still readable.
 
 Text, logos and textures inside the selection may still be redrawn by the model. Exclude lettering that must remain exact where possible. Better pixel handling does not guarantee correct generated text. The default square image-generation workflow is unchanged.
+
+
+### Selection-edit boundary alignment
+
+New tasks retain unchanged selection context. Import estimates small position, scale and skew changes, combines registration with the crop mapping, and samples the raw result once. The changed object is excluded from registration.
+
+Unreliable registration, excessive changes or inconsistent context regions retain the generated file and refuse automatic import. Try a smaller selection. Whole-canvas edits and featureless context cannot guarantee automatic correction; review internal geometry and lettering. New jobs record `edit-alignment.json`; legacy jobs without context retain their original mapping behavior.

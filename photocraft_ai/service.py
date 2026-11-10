@@ -58,6 +58,19 @@ def edited_layer(image: Image.Image, mask: Image.Image, job: Path) -> Image.Imag
         mapping=json.loads(transform.read_text(encoding='utf-8'))
         from .edit_region import map_result
         aligned=map_result(image,mask,mapping)
+        context=job/'edit-context.png'
+        if mapping.get('version')==2 and context.is_file():
+            from .edit_alignment import estimate,render,AlignmentError
+            crop=tuple(mapping['crop_box'])
+            try:
+                with Image.open(context) as original:
+                    matrix,report=estimate(original,aligned.crop(crop),mask.crop(crop))
+            except AlignmentError as error:
+                (job/'edit-alignment.json').write_text(json.dumps({'status':'rejected','message':str(error)},ensure_ascii=False),encoding='utf8')
+                raise
+            (job/'edit-alignment.json').write_text(json.dumps(report,indent=2),encoding='utf8')
+            region=render(image,mapping,(crop[2]-crop[0],crop[3]-crop[1]),matrix)
+            aligned=Image.new('RGBA',mask.size);aligned.paste(region,crop[:2])
     else:
         # Retained jobs from older versions used the full canvas directly.
         aligned=fit_dimensions(image,mask.size,adapt=True)
@@ -191,6 +204,7 @@ class Service:
             elif mode in ('fill', 'remove'):
                 from .edit_region import prepare_region
                 square, selection, mapping = prepare_region(full,mask)
+                full.crop(tuple(mapping['crop_box'])).save(job/'edit-context.png')
                 square.save(source)
                 selection.save(job/'selection-guide.png')
                 overlay=Image.new('RGBA',square.size,(255,0,180,0))

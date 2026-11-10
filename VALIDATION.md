@@ -320,3 +320,12 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - One live Codex edit on the provided PSD using the original broad selection: remove the white power bank and strap. Input now retains the native 790×1108 working crop inside a 1120-square reference (previously the whole portrait was reduced to 479×1024). Returned 1254-square image mapped directly into the source crop. Reviewed final image.
 - Native apply/save/reopen verified at 790×1688 with three layers. Pixels outside the original selection were identical; source PSD SHA-256 unchanged. The first isolated QA import used a mismatched read root; corrected the harness and reused the same generated result without an additional model call.
 - Fine text inside the selection can still be rewritten by image generation. This validation establishes detail-preserving coordinate handling and outside-selection fidelity, not exact OCR reproduction. Private test images and PSDs were not added to the repository.
+
+
+## Edit-boundary registration (2026-11-10)
+
+- 112 Python tests passed: context-only translated-scene registration with changed interior, excessive-scale rejection, changed flat background rejection, exact-context identity handling and refusal before native layer insertion.
+- Reused the one previously generated 1254×1254 power-bank removal result (no new generation). Isolated native apply/save/reopen verified at 790×1688 with three layers; source SHA-256 unchanged and all pixels outside the selection exactly unchanged. Final image reviewed at window/tabletop boundaries.
+- Measured affine mapping from original crop to generated crop: x scale 1.01653, y scale 1.01051, small shear and translation; maximum corner displacement 19.14 pixels. Context ECC 0.99561; mean grayscale context difference improved from 14.99 to 3.24 on the 0–255 intensity scale. These are registration measurements, not an assurance of exact generated text.
+- Raw-image registration and coordinate inversion are combined into one Lanczos warp; reduced images are used only to estimate alignment. Whole-canvas/featureless cases and legacy jobs without context cannot guarantee geometric correction.
+- Pinned Windows wheels: NumPy 2.2.6 and opencv-python-headless 4.12.0.88, downloaded from PyPI with SHA-256 verification; portable builds extract their bundled libraries/license notices.

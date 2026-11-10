@@ -13,9 +13,10 @@ python = output / 'python'
 python.mkdir()
 with zipfile.ZipFile(ROOT / 'runtime/python-3.13.5-embed-amd64.zip') as archive:
     archive.extractall(python)
-wheel = next((ROOT / 'runtime/portable-downloads').glob('pillow-11.3.0-cp313-cp313-win_amd64.whl'))
-with zipfile.ZipFile(wheel) as archive:
-    archive.extractall(python / 'Lib/site-packages')
+for pattern in ('pillow-11.3.0-cp313-cp313-win_amd64.whl','numpy-2.2.6-cp313-cp313-win_amd64.whl','opencv_python_headless-4.12.0.88-cp37-abi3-win_amd64.whl'):
+    wheel = next((ROOT / 'runtime/portable-downloads').glob(pattern))
+    with zipfile.ZipFile(wheel) as archive:
+        archive.extractall(python / 'Lib/site-packages')
 (python / 'python313._pth').write_text('python313.zip\n.\n..\nLib/site-packages\nimport site\n', encoding='utf-8')
 for folder in ('photocraft_ai', 'vendor', 'native-source', 'docs'):
     shutil.copytree(ROOT / folder, output / folder, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))

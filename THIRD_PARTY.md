@@ -22,6 +22,16 @@ Pillow and its binary dependency license notices are preserved under
 Python source/distribution: https://www.python.org/downloads/release/python-3135/
 Pillow source: https://github.com/python-pillow/Pillow/tree/11.3.0
 
+The current development build also uses NumPy 2.2.6 (BSD-3-Clause) and
+opencv-python-headless 4.12.0.88 (OpenCV Apache-2.0 and wheel-specific notices)
+for selection-context alignment. Their Windows wheels, including bundled binary
+dependencies and license notices, are preserved under `python/Lib/site-packages/`
+(`numpy-2.2.6.dist-info/`, `opencv_python_headless-4.12.0.88.dist-info/`, and `cv2/`).
+Source installs obtain these packages through `requirements.txt`; offline portable
+builds extract their pinned wheels alongside Pillow, with no download at launch.
+Sources: https://github.com/numpy/numpy/tree/v2.2.6 and
+https://github.com/opencv/opencv-python.
+
 ## Native editor integration (0.2)
 
 The optional `native/photocraft.exe` is a locally rebuilt PhotoCraft 0.20.1, based on
