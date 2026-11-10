@@ -42,7 +42,7 @@ def fit_dimensions(generated: Image.Image, size: tuple[int, int], *, adapt=False
 
 
 def edit_reference(full: Image.Image, mask: Image.Image):
-    """Letterbox the complete canvas into a bounded square, retaining its coordinate map."""
+    """Legacy coordinate helper; new edits use edit_region.prepare_region."""
     fitted = ImageOps.contain(full.convert('RGBA'), (1024, 1024), Image.Resampling.LANCZOS)
     x, y = (1024-fitted.width)//2, (1024-fitted.height)//2
     square = Image.new('RGBA', (1024,1024))
@@ -56,10 +56,8 @@ def edited_layer(image: Image.Image, mask: Image.Image, job: Path) -> Image.Imag
     transform = job/'edit-transform.json'
     if transform.is_file():
         mapping=json.loads(transform.read_text(encoding='utf-8'))
-        box=tuple(mapping['content_box'])
-        if len(box)!=4 or not (0<=box[0]<box[2]<=1024 and 0<=box[1]<box[3]<=1024):
-            raise RuntimeError('编辑坐标映射无效。')
-        aligned=fit_dimensions(image,(1024,1024),adapt=True).crop(box).resize(mask.size,Image.Resampling.LANCZOS)
+        from .edit_region import map_result
+        aligned=map_result(image,mask,mapping)
     else:
         # Retained jobs from older versions used the full canvas directly.
         aligned=fit_dimensions(image,mask.size,adapt=True)
@@ -191,19 +189,20 @@ class Service:
             if mode == 'generate':
                 source, guide = None, None
             elif mode in ('fill', 'remove'):
-                square, selection, box = edit_reference(full,mask)
+                from .edit_region import prepare_region
+                square, selection, mapping = prepare_region(full,mask)
                 square.save(source)
                 selection.save(job/'selection-guide.png')
                 overlay=Image.new('RGBA',square.size,(255,0,180,0))
                 overlay.putalpha(selection.point(lambda p:round(p*.55)))
                 Image.alpha_composite(square,overlay).save(guide)
-                (job/'edit-transform.json').write_text(json.dumps({'content_box':box,'canvas_size':dims}),encoding='utf-8')
+                (job/'edit-transform.json').write_text(json.dumps(mapping),encoding='utf-8')
         if mode == 'remove':
             prompt = 'Remove the marked object and fill the area naturally, preserving surrounding light, texture and perspective.'
         meta = {'mode': mode, 'prompt': prompt, 'size': dims,
                 'document': target.name if target else None, 'revision': revision,
                 'feather_px': feather_px if mode != 'create' else 0,
-                'generation_size': '1024x1024' if mode in ('generate','fill','remove') else dims,
+                'generation_size': f'{square.width}x{square.height}' if mode in ('fill','remove') else '1024x1024' if mode=='generate' else dims,
                 'references':reference_names}
         (job / 'job.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
         return Prepared(job, mode, prompt, target, revision, dims, mask, source, guide, feather_px,reference_paths,active_layer,layout_options)
@@ -217,9 +216,12 @@ class Service:
         if prepared.mode in ('layout','detail','batch','reflow'):
             from .layout import generate_layout
             return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options,**({'long_page':True} if prepared.mode=='detail' else {}))
+        generation_size='1024x1024' if prepared.mode=='generate' else 'x'.join(map(str,prepared.size))
+        if prepared.mode in ('fill','remove') and prepared.source:
+            with Image.open(prepared.source) as reference:generation_size=f'{reference.width}x{reference.height}'
         return self.backend.generate(prepared.job, prepared.prompt, prepared.mode, cancel, progress,
                                      prepared.source, prepared.guide,
-                                     '1024x1024' if prepared.mode in ('generate','fill','remove') else 'x'.join(map(str, prepared.size)),
+                                     generation_size,
                                      **({'reference_images':prepared.references} if prepared.references else {}))
 
     def apply(self, prepared: Prepared, path: Path):

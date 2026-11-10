@@ -312,3 +312,11 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - Isolated native outpaint-branch regression on 041500.psb used a white generated-background fixture and deterministic layout (no new image generation): four clipping relationships and all group children remained intact; saved/reopened and reviewed screenshot. This also exposed/fixed import ordering above native Background layers.
 - Flattened native fixture derived from f1.psd: cached previously generated background reused through a stub backend; empty foreground layout skipped analysis, native output reopened at 1500×2000 with hidden original raster and one visible replacement. No claim of a new image-generation test in this run.
 - No legacy cache files were deleted. Automatic pruning is limited to completed jobs marked by the new worker.
+
+
+## Selection-edit quality regression (2026-11-10)
+
+- 107 Python tests passed. New coverage: actual 790×1688 portrait crop coordinates, small selections on large canvases, irregular/soft masks and edge crops, bounded large inputs, invalid maps, and a high-frequency legacy return retained without the intermediate downscale.
+- One live Codex edit on the provided PSD using the original broad selection: remove the white power bank and strap. Input now retains the native 790×1108 working crop inside a 1120-square reference (previously the whole portrait was reduced to 479×1024). Returned 1254-square image mapped directly into the source crop. Reviewed final image.
+- Native apply/save/reopen verified at 790×1688 with three layers. Pixels outside the original selection were identical; source PSD SHA-256 unchanged. The first isolated QA import used a mismatched read root; corrected the harness and reused the same generated result without an additional model call.
+- Fine text inside the selection can still be rewritten by image generation. This validation establishes detail-preserving coordinate handling and outside-selection fidelity, not exact OCR reproduction. Private test images and PSDs were not added to the repository.

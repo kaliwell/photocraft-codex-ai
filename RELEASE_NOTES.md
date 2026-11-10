@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复局部修改/移除物体的细节损失：选区加上下文取样，最长 1536 像素；返回原图直接裁切，一次适配；兼容旧任务，保留选区外像素。
+- Preserve detail in fill/remove with selection-local references and single-pass mapping from raw returned pixels; legacy edit maps remain supported.
+
 - 审计修复：保护剪贴/蒙版组，收紧盖印比对，支持单层 PSD，新增中间缓存保留规则及查看/清理命令；保留生成图片、成品和旧任务。修复扩图背景无法放在原生 Background 图层下方的导入错误。
 - Audit fixes: preserve dependent groups, compare stamped previews at full resolution, support flattened PSDs, manage completed intermediate caches, and import outpainted scenes above hidden native Background backups.
 

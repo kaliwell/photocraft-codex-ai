@@ -21,6 +21,6 @@ Export a ZIP of lossless RGBA8 PNG slices at original width, or exchange a versi
 
 顶部选区工具栏的 **生成图片** 默认请求 1024×1024（1:1）。结果等比居中放入选区的外接矩形，并按选区透明度裁切，不拉伸、不裁掉主体。选区不是方形时会留下透明余量。模型返回其他比例时同样等比放入，避免与整张画布比例不同而导入失败。
 
-从 0.3.4 起，**局部修改** 和 **移除物体** 将完整画布等比补边为 1024×1024 参考图，选区指引同步映射；模型返回后归一化为方图、移除补边，再映射回原画布，只应用原选区。模型不遵守输入构图或输出比例时仍可能有几何误差；原始生成结果保留，文档名及修订号检查、单次新图层导入和撤销机制保持有效。旧任务无坐标映射时，按原画布尺寸归一化结果。
+当前统一开发版中，**局部修改**和**移除物体**按选区加上下文裁取工作区，参考边长最多 1536 像素；返回图片按坐标映射从原始分辨率直接裁取并一次适配。只替换原始选区，保留独立羽化蒙版、撤销与修订号检查。旧版完整画布 1024×1024 补边任务仍兼容读取。
 
-**Generate image** requests 1024×1024 by default. New artwork is proportionally centered inside the selection bounds and clipped by selection alpha, without stretching. Non-square selections leave transparent margins. Since 0.3.4, Fill/Remove use square letterboxed references and invert that mapping on import. Outputs with incorrect aspect ratios are normalized and may have geometric error; original files are retained. Legacy tasks are normalized directly to their original canvas size. Stale-document protection remains active. Model output dimensions are a request rather than a guarantee.
+**Generate image** still requests a square image by default and fits it proportionally inside the selection. Current Fill/Remove use selection-local references bounded to 1536 pixels and map raw returned pixels back with one resampling pass. Legacy full-canvas 1024 letterbox mappings remain readable. Stale-document protection, editable feathering and original-selection clipping remain active; model output dimensions are not guaranteed.

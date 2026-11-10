@@ -195,6 +195,9 @@ class CodexBackend:
                 'Edit Image 1, never return Image 2 or paint the magenta guide into the result. '
                 'Preserve image framing, aspect ratio, object positions and everything outside that area. '
                 'Return the complete edited image at the same dimensions.\n'
+                'This target is a selection-local crop with surrounding context, not necessarily the full document. '
+                'Preserve fine edges and existing readable text; do not redraw text outside the marked edit area. '
+                'Keep the target framing and use the highest available detail fidelity.\n'
             )
             with Image.open(selection_path) as selection:
                 bounds = selection.convert('L').getbbox()

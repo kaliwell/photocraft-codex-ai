@@ -36,6 +36,6 @@ class EditDimensionsTests(unittest.TestCase):
             bridge._revision.return_value=3
             p=Service(bridge,root).prepare('fill','necklace')
             self.assertEqual(p.mask.size,(192,108))
-            self.assertEqual(Image.open(p.source).size,(1024,1024))
+            self.assertEqual(Image.open(p.source).size,(256,256))
             self.assertEqual(Image.open(p.job/'selection.png').size,(192,108))
-            self.assertEqual(Image.open(p.job/'selection-guide.png').size,(1024,1024))
+            self.assertEqual(Image.open(p.job/'selection-guide.png').size,(256,256))

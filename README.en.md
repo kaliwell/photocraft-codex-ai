@@ -2,7 +2,7 @@
 
 [中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)
 
-**Unified development showcase · 2026-11-06**: ratio adaptation, background outpainting and the latest audit fixes. Generation, selection editing and object removal remain the main tools.
+**Unified development showcase · 2026-11-10**: detail-preserving selection edits, ratio adaptation, background outpainting and audit fixes. Generation, selection editing and object removal remain the main tools.
 
 **One drawer for AI editing, references and editable PSD base layouts.**
 
@@ -142,7 +142,7 @@ To use an explicit HTTP/mixed proxy, create `runtime/codex-proxy.json` inside th
 
 ### Data handling and limitations
 
-- Selection edits send **the full flattened source image and a reference image marking the selection** to Codex image generation. The selection limits local result compositing, not what is uploaded.
+- Fill/remove requests send **a selection-local crop with surrounding context and a selection guide**. Large selections may still include the full canvas. Additional references are sent in full; the model sees more than the locally replaced selection.
 - The plugin uses the existing CLI sign-in without extracting login credentials and does not automatically fall back to a paid API. Cancellation stops the child process; a server-side job already in progress may still consume quota.
 - The worker accepts token-authenticated localhost requests and rejects browser Origin requests. Codex runs with the `workspace-write` sandbox, `image_generation` enabled, and multi-agent mode disabled.
 - Automatic import is refused if the document has changed or closed. A mismatched aspect ratio also prevents import while preserving the output; a different resolution with the same aspect ratio is scaled proportionally.
@@ -181,3 +181,10 @@ See [VALIDATION.md](VALIDATION.md) for recorded results and known testing bounda
 | [0.2.6](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.6) | Legacy portable bundle including Python, Pillow, PhotoCraft, and Codex CLI |
 | [0.2.5](https://github.com/kaliwell/photocraft-codex-ai/releases/tag/v0.2.5) | Remove extra feathering for image generation; preserve the original selection mask |
 | 0.2.4–0.2.1 | Per-plugin proxy, HTTPS error classification and timeout, local edit feathering, single-generation and latency improvements |
+
+
+### Selection-edit detail preservation
+
+Fill and remove use a selection-local crop with surrounding context, retaining native pixels where possible. References are bounded to 1536 pixels per edge with an explicit map back to the canvas. Returned pixels are cropped directly at their original resolution and resampled once, removing the intermediate 1024-pixel downscale. Only the original selection is replaced; editable feathering and undo remain available. Legacy letterbox mappings are still readable.
+
+Text, logos and textures inside the selection may still be redrawn by the model. Exclude lettering that must remain exact where possible. Better pixel handling does not guarantee correct generated text. The default square image-generation workflow is unchanged.

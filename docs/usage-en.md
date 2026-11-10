@@ -132,3 +132,10 @@ Ordinary generated results are inserted above the layer selected when the task s
 Open an existing project, set target dimensions in the PSD drawer and choose **Adapt PSD ratio**. Save a new copy with editable layers; clipped/masked groups stay together and flattened images support outpainting. Redundant stamped covers are hidden only after full-resolution comparison.
 
 [Full workflow, background outpainting and cache management](psd-reflow-en.md)
+
+
+### Selection-edit detail preservation
+
+Fill and remove use a selection-local crop with surrounding context, retaining native pixels where possible. References are bounded to 1536 pixels per edge with an explicit map back to the canvas. Returned pixels are cropped directly at their original resolution and resampled once, removing the intermediate 1024-pixel downscale. Only the original selection is replaced; editable feathering and undo remain available. Legacy letterbox mappings are still readable.
+
+Text, logos and textures inside the selection may still be redrawn by the model. Exclude lettering that must remain exact where possible. Better pixel handling does not guarantee correct generated text. The default square image-generation workflow is unchanged.
