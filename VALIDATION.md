@@ -337,3 +337,11 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - Native QA exported 041500.psb through a restricted exchange root, copied the completed PSD beside the original, bound the open document to the final path, reopened it with all top-level layers retained, and verified unchanged source SHA-256. A second run preserved the previous result and used a numbered filename. Successful publication removed its temporary exchange PSD.
 - Confirmed unsaved-document fallback to exchange and rejection of associating the result with the source file. No remote model/image-generation request was needed.
 - Desktop build, all-target Clippy with warnings denied, wasm check and layering check passed. Native patch reverse-apply check passed.
+
+
+## Native-preview reflow review (2026-11-12)
+
+- 121 Python tests passed, including clipped visible geometry, mixed-folder cluster preservation, correction rendering before approval, approval immutability, cancellation, repeated-card size checks, and bounded rejection without publication.
+- Real 1500×2000 user poster adapted to 1500×1500. One background-generation result was reused across QA attempts. An early run rejected overlapping lettering and exported no final PSD. After exposing independent annotation text positions, actual rendered review found Type-C/charging and headline spacing issues, corrected them, then approved the second rendered preview.
+- Latest-code validation of the approved plan passed repeated-panel guards. Original 84 layer kinds retained with the generated background added; native save/reopen and unchanged source SHA-256 verified. Six feature cards now share uniform sizing and clipped photo/base relationships. Final preview reviewed manually. Private artwork is not published in the repository.
+- Up to three visual checks; original source is duplicated afresh for each draft and draft tabs close before model analysis. No final source-sibling PSD is published unless reviewed.

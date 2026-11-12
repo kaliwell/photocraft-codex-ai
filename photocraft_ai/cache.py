@@ -4,7 +4,7 @@ from pathlib import Path
 
 LIMIT=2*1024**3
 AGE=14*86400
-NAMES={'source.png','guide.png','selection.png','selection-guide.png','blend-mask.png','canvas.png','reflow-source.png','reflow-scene.png','edit-context.png'}
+NAMES={'source.png','guide.png','selection.png','selection-guide.png','blend-mask.png','canvas.png','reflow-source.png','reflow-scene.png','edit-context.png','preview.png'}
 
 
 def safe(path,root):

@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 比例适配增加实际预览视觉审查与有界自动修正；修复剪贴图片完整尺寸误当卡片可见尺寸，支持混合文件夹内标注与卡片分别布局。
+- Visually review native reflow drafts with bounded corrections; respect clipped visible bounds and separate independent callouts from cards in mixed folders.
+
 - PSD 比例自适应结果保存到原工程同级目录，重名自动编号，关联新文档保存路径；未保存工程使用临时输出。
 - Save ratio-adapted PSDs beside their source project with collision-safe names and the correct document save identity. Unsaved projects keep temporary output.
 

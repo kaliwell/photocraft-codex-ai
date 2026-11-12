@@ -226,7 +226,9 @@ class Service:
             from .reflow import analyze_reflow
             from .reflow_background import generate_scene
             generate_scene(prepared,self.backend,cancel,progress)
-            return analyze_reflow(prepared,cancel,progress)
+            initial=analyze_reflow(prepared,cancel,progress)
+            from .reflow_review import review_reflow
+            return review_reflow(self,prepared,initial,cancel,progress)
         if prepared.mode in ('layout','detail','batch','reflow'):
             from .layout import generate_layout
             return generate_layout(prepared.job,prepared.references,prepared.prompt,cancel,progress,prepared.layout_options,**({'long_page':True} if prepared.mode=='detail' else {}))

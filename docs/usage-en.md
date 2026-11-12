@@ -149,3 +149,10 @@ Unreliable registration, excessive changes or inconsistent context regions retai
 
 
 Ratio-adapted PSDs default to the source project folder, e.g. `Poster.psb` → `Poster_自适应_1500x2000.psd`. Existing results receive numbered suffixes instead of being overwritten. The new document adopts this save path for subsequent Ctrl+S. Unsaved projects retain temporary output; failure to write beside the project reports an error and retains the internal export.
+
+
+### Visual review of ratio-adapted layouts
+
+The initial layout is rendered in a temporary native copy and reviewed visually beside the source. Review checks repeated-panel sizes, text overlaps, annotations, margins and whitespace. Corrections are rendered again before approval. Up to three checks allow at most two correction rounds; persistent problems retain drafts/plans and refuse final PSD export. Background-only documents skip layout review.
+
+Clipped-photo layout bounds respect their visible bases. Simple folders mixing independent callouts with a card can form separate layout units while the clipped photo/base transform together. Actual-preview review adds analysis time and cannot guarantee every design issue is corrected. Approved PSDs still save beside the source, retaining original layers and leaving the source unchanged.
