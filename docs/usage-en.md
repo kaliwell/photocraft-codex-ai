@@ -1,5 +1,9 @@
 # Unified build: illustrated guide
 
+## Quick image export
+
+Click **Export images** in the title bar to export the current full canvas as PNG into an `导出图片` folder beside the project. The adjacent `...` menu exports all open projects or lets you choose an output folder for the current/all projects, including unsaved documents. Filename collisions are numbered automatically. Progress lists successes and failures; cancellation keeps completed images.
+
 [中文指南](usage-zh.md) · [Back to README](../README.en.md)
 
 The showcase now reflects the current unified drawer and named groups. The older v0.4.0 ZIP predates some features.

@@ -1092,14 +1092,15 @@ index 610bb145c..270a07948 100644
                      enabled: true,
                      linked: true,
 diff --git a/crates/ui-egui/src/app.rs b/crates/ui-egui/src/app.rs
-index 3015f0214..9c160fbe9 100644
+index 3015f0214..eaec4d457 100644
 --- a/crates/ui-egui/src/app.rs
 +++ b/crates/ui-egui/src/app.rs
-@@ -186,6 +186,7 @@ impl PhotocraftApp {
+@@ -186,6 +186,8 @@ impl PhotocraftApp {
              updates_rt: Default::default(),
              discard: None,
              file_dialog: None,
 +            long_cut: None,
++            image_export: None,
              tiff_options: None,
              save_dirs: HashMap::new(),
              disk_stamps: HashMap::new(),
@@ -1201,16 +1202,30 @@ index 956776a50..0f6ea9182 100644
  fn failed_clipboard_reads_preserve_editable_contents_until_retry() {
      use std::sync::atomic::{AtomicBool, Ordering};
 diff --git a/crates/ui-egui/src/app/commands.rs b/crates/ui-egui/src/app/commands.rs
-index 1a43ffe77..7844e43e0 100644
+index 1a43ffe77..597753cd5 100644
 --- a/crates/ui-egui/src/app/commands.rs
 +++ b/crates/ui-egui/src/app/commands.rs
-@@ -54,6 +54,24 @@ impl PhotocraftApp {
+@@ -54,6 +54,38 @@ impl PhotocraftApp {
          {
              authorize(id, &params)?;
          }
 +        if id == "tools.longCut.open" {
-+            if !params.is_object() || !params.as_object().is_some_and(|o| o.is_empty()) { return Err("Long cutter expects an empty object".into()); }
++            if !params.is_object() || !params.as_object().is_some_and(|o| o.is_empty()) {
++                return Err("Long cutter expects an empty object".into());
++            }
 +            return crate::long_cut::open(self);
++        }
++        if matches!(id, "tools.imageExport.current" | "tools.imageExport.all" | "tools.imageExport.chooseCurrent" | "tools.imageExport.chooseAll") {
++            if !params.as_object().is_some_and(|p| p.is_empty()) {
++                return Err("Image export expects an empty object".into());
++            }
++            if id == "tools.imageExport.chooseCurrent" || id == "tools.imageExport.chooseAll" {
++                return crate::image_export::choose(self, id.ends_with("All"));
++            }
++            if id == "tools.imageExport.current" && self.session.active().is_some_and(|s| s.path.is_none()) {
++                return crate::image_export::choose(self, false);
++            }
++            return crate::image_export::start(self, id == "tools.imageExport.all", None);
 +        }
 +        if id == "file.export.clipboard" {
 +            let result = self.export_document_clipboard(&params);
@@ -1230,7 +1245,7 @@ index 1a43ffe77..7844e43e0 100644
          // (#5667): History reads the transform (or Place Embedded), then New Layer. Only for a
          // command that can run; a transform refused or still being applied keeps the box open and
 diff --git a/crates/ui-egui/src/app/frame.rs b/crates/ui-egui/src/app/frame.rs
-index 07ea17b7e..d50c8dc08 100644
+index 07ea17b7e..4182ee0e9 100644
 --- a/crates/ui-egui/src/app/frame.rs
 +++ b/crates/ui-egui/src/app/frame.rs
 @@ -81,10 +81,11 @@ impl PhotocraftApp {
@@ -1257,11 +1272,12 @@ index 07ea17b7e..d50c8dc08 100644
              // Files dragged in from another app's window: PhotoCraft comes to the front and takes
              // the keyboard, as Photoshop does, instead of staying behind the source (#5687).
              ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-@@ -309,6 +312,7 @@ impl PhotocraftApp {
+@@ -309,6 +312,8 @@ impl PhotocraftApp {
          workspace_ui::windows(self, &ctx);
          palette::show(self, &ctx);
          dialogs::show(self, &ctx);
 +        crate::long_cut::show(self, &ctx);
++        crate::image_export::show(self, &ctx);
          layers_panel_ui::show_dialog(self, &ctx);
          rasterize_prompt::run_pending(self, &ctx);
          jobs_ui::dialog(self, &ctx);
@@ -2747,8 +2763,48 @@ index 5d060f2c6..7e72e7450 100644
      }
      let mut out = doc.clone();
      out.insert_above(Some(target), l);
+diff --git a/crates/ui-egui/src/file_dialog/tests.rs b/crates/ui-egui/src/file_dialog/tests.rs
+index 52149ab8e..21ba1a408 100644
+--- a/crates/ui-egui/src/file_dialog/tests.rs
++++ b/crates/ui-egui/src/file_dialog/tests.rs
+@@ -408,6 +408,35 @@ fn ask_folder_uses_the_async_dialog_and_returns_the_selected_path() {
+     assert_eq!(selected.borrow().as_deref(), Some("/pics/frames"));
+ }
+ 
++#[test]
++#[cfg(not(target_arch = "wasm32"))]
++fn image_export_uses_chosen_folder_for_unsaved_projects() {
++    let (mut app, open, _) = app();
++    let ctx = egui::Context::default();
++    let folder = std::env::temp_dir().join(format!(
++        "photocraft-export-picker-{}-{}",
++        std::process::id(),
++        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
++    ));
++    let before = app.session.active().unwrap().doc.clone();
++    crate::image_export::choose(&mut app, true).unwrap();
++    app.poll_file_dialog(&ctx, None);
++    assert!(matches!(open.borrow().first().map(|(r, _)| r), Some(FileDialogRequest::Folder { .. })));
++    answer(&open, Some(FileDialogAnswer::FolderTo(folder.to_string_lossy().into())));
++    app.poll_file_dialog(&ctx, None);
++    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
++    loop {
++        if std::fs::read_dir(&folder).is_ok_and(|mut entries| entries.any(|e| e.is_ok_and(|e| e.path().extension().is_some_and(|e| e == "png")))) {
++            break;
++        }
++        assert!(std::time::Instant::now() < deadline);
++        std::thread::sleep(std::time::Duration::from_millis(20));
++    }
++    assert!(std::sync::Arc::ptr_eq(&before, &app.session.active().unwrap().doc));
++    assert!(app.session.active().unwrap().path.is_none());
++    std::fs::remove_dir_all(folder).unwrap();
++}
++
+ #[test]
+ fn filtered_picker_requests_only_the_given_extensions() {
+     let (mut app, open, _) = app();
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..524da4d28 100644
+index ef2788221..9e8fc1025 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2762,7 +2818,7 @@ index ef2788221..524da4d28 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,182 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,196 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -2945,11 +3001,25 @@ index ef2788221..524da4d28 100644
 +	Open a PSD before adapting its ratio	请先打开需要调整比例的 PSD。
 +	PSD reflow content falls outside the target canvas	返回的排版超出目标画布，方案已保留，请重试。
 +	PSD reflow omitted content groups	返回的排版遗漏了内容区块，方案已保留。
++
++	Export images	导出图片
++	Export current image beside project	一键导出当前画布到工程同级的“导出图片”文件夹
++	Export current image	导出当前工程图片
++	Export all open images	导出所有已打开工程
++	Export current to folder	当前工程导出到指定文件夹
++	Export all to folder	所有工程导出到指定文件夹
++	Full visible canvas · PNG · existing files are kept	完整可见画布 · PNG · 重名自动编号
++	Export finished; completed images are kept	导出完成，已生成的图片会保留
++	Export cancelled; completed images are kept	已取消，已生成的图片会保留
++	Exported	成功
++	Failed	失败
++
++	Save this project first, or choose an export folder	请先保存工程，或选择指定导出文件夹
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..ad301ff91 100644
+index c0bb1a3ab..1b80bc2d3 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,190 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,204 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -3140,6 +3210,276 @@ index c0bb1a3ab..ad301ff91 100644
 +	Open a PSD before adapting its ratio	请先打开需要调整比例的 PSD。
 +	PSD reflow content falls outside the target canvas	返回的排版超出目标画布，方案已保留，请重试。
 +	PSD reflow omitted content groups	返回的排版遗漏了内容区块，方案已保留。
++
++	Export images	导出图片
++	Export current image beside project	一键导出当前画布到工程同级的“导出图片”文件夹
++	Export current image	导出当前工程图片
++	Export all open images	导出所有已打开工程
++	Export current to folder	当前工程导出到指定文件夹
++	Export all to folder	所有工程导出到指定文件夹
++	Full visible canvas · PNG · existing files are kept	完整可见画布 · PNG · 重名自动编号
++	Export finished; completed images are kept	导出完成，已生成的图片会保留
++	Export cancelled; completed images are kept	已取消，已生成的图片会保留
++	Exported	成功
++	Failed	失败
++
++	Save this project first, or choose an export folder	请先保存工程，或选择指定导出文件夹
+diff --git a/crates/ui-egui/src/image_export.rs b/crates/ui-egui/src/image_export.rs
+new file mode 100644
+index 000000000..b3667b5a5
+--- /dev/null
++++ b/crates/ui-egui/src/image_export.rs
+@@ -0,0 +1,250 @@
++//! Flat PNG exports from immutable document snapshots; never save or switch projects.
++use crate::{PhotocraftApp, plugin_i18n::text as l};
++use serde_json::Value;
++#[cfg(not(target_arch = "wasm32"))]
++use serde_json::json;
++use std::sync::{
++    Arc,
++    atomic::{AtomicBool, Ordering},
++    mpsc,
++};
++
++#[derive(Default)]
++pub(crate) struct State {
++    receiver: Option<mpsc::Receiver<Event>>,
++    cancel: Arc<AtomicBool>,
++    busy: bool,
++    total: usize,
++    done: usize,
++    files: Vec<String>,
++    errors: Vec<String>,
++}
++
++#[cfg(all(test, not(target_arch = "wasm32")))]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn filenames_are_windows_safe() {
++        assert_eq!(file_stem("CON.psd"), "_CON");
++        assert_eq!(file_stem("ab?.psd"), "ab_");
++        assert_eq!(file_stem("..."), "image");
++        assert_eq!(file_stem("海报.psb"), "海报");
++    }
++
++    #[test]
++    fn repeated_exports_preserve_existing_files() {
++        let folder = std::env::temp_dir().join(format!(
++            "photocraft-export-test-{}-{}",
++            std::process::id(),
++            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
++        ));
++        let first = write_unique(&folder, "poster", b"first").unwrap();
++        let second = write_unique(&folder, "poster", b"second").unwrap();
++        assert!(second.ends_with("poster_2.png"));
++        assert_eq!(std::fs::read(first).unwrap(), b"first");
++        assert_eq!(std::fs::read(second).unwrap(), b"second");
++        std::fs::remove_dir_all(folder).unwrap();
++    }
++
++    #[test]
++    fn batch_exports_full_canvases_without_mutating_projects() {
++        let folder = std::env::temp_dir().join(format!(
++            "photocraft-batch-test-{}-{}",
++            std::process::id(),
++            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
++        ));
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        for (w, h) in [(32, 48), (64, 40)] {
++            app.run("file.new", json!({"width":w,"height":h})).unwrap();
++        }
++        app.run("select.rect", json!({"x":0,"y":0,"width":4,"height":4})).unwrap();
++        let active = app.session.active_index();
++        let snapshots: Vec<_> = app.session.documents().iter().map(|s| s.doc.clone()).collect();
++        start(&mut app, true, Some(folder.to_string_lossy().into())).unwrap();
++        assert!(start(&mut app, false, None).is_err());
++        let rx = app.image_export.as_ref().unwrap().receiver.as_ref().unwrap();
++        let mut sizes = Vec::new();
++        while let Event::Item(result) = rx.recv_timeout(std::time::Duration::from_secs(30)).unwrap() {
++            let bytes = std::fs::read(result.unwrap()).unwrap();
++            assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
++            sizes.push((u32::from_be_bytes(bytes[16..20].try_into().unwrap()), u32::from_be_bytes(bytes[20..24].try_into().unwrap())));
++        }
++        assert_eq!(sizes, [(32, 48), (64, 40)]);
++        assert_eq!(app.session.active_index(), active);
++        for (s, before) in app.session.documents().iter().zip(snapshots) {
++            assert!(Arc::ptr_eq(&s.doc, &before));
++            assert!(s.path.is_none());
++        }
++        std::fs::remove_dir_all(folder).unwrap();
++    }
++}
++#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
++enum Event {
++    Item(Result<String, String>),
++    Finished,
++}
++
++#[cfg(any(not(target_arch = "wasm32"), test))]
++fn file_stem(name: &str) -> String {
++    let stem = std::path::Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or("image");
++    let clean: String = stem.chars().take(100).map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect();
++    let clean = clean.trim_matches([' ', '.']);
++    if clean.is_empty() {
++        return "image".into();
++    }
++    let upper = clean.to_ascii_uppercase();
++    if [
++        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6",
++        "LPT7", "LPT8", "LPT9",
++    ]
++    .contains(&upper.as_str())
++    {
++        format!("_{clean}")
++    } else {
++        clean.to_string()
++    }
++}
++
++#[cfg(not(target_arch = "wasm32"))]
++fn write_unique(folder: &std::path::Path, stem: &str, bytes: &[u8]) -> Result<String, String> {
++    use std::{fs, io::Write};
++    fs::create_dir_all(folder).map_err(|e| e.to_string())?;
++    for i in 1..=10000 {
++        let filename = if i == 1 { format!("{stem}.png") } else { format!("{stem}_{i}.png") };
++        let path = folder.join(filename);
++        let mut file = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
++            Ok(f) => f,
++            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
++            Err(e) => return Err(e.to_string()),
++        };
++        if let Err(error) = file.write_all(bytes) {
++            drop(file);
++            let _ = fs::remove_file(&path);
++            return Err(error.to_string());
++        }
++        return Ok(path.to_string_lossy().into_owned());
++    }
++    Err("Too many existing exports".into())
++}
++
++pub(crate) fn start(app: &mut PhotocraftApp, all: bool, folder: Option<String>) -> Result<Value, String> {
++    #[cfg(target_arch = "wasm32")]
++    {
++        let _ = (app, all, folder);
++        Err("not available on the web".into())
++    }
++    #[cfg(not(target_arch = "wasm32"))]
++    {
++        if app.image_export.as_ref().is_some_and(|s| s.busy) {
++            return Err(l("Please wait for the current task to finish"));
++        }
++        let active = app.session.active_index().ok_or("No document")?;
++        let jobs: Vec<_> =
++            app.session.documents().iter().enumerate().filter(|(i, _)| all || *i == active).map(|(_, s)| (s.doc.clone(), s.path.clone())).collect();
++        let (tx, rx) = mpsc::channel();
++        let cancel = Arc::new(AtomicBool::new(false));
++        let flag = cancel.clone();
++        app.image_export = Some(State { receiver: Some(rx), cancel, busy: true, total: jobs.len(), ..Default::default() });
++        std::thread::spawn(move || {
++            for (doc, path) in jobs {
++                if flag.load(Ordering::Relaxed) {
++                    break;
++                }
++                let result = (|| {
++                    let output = match &folder {
++                        Some(folder) => std::path::PathBuf::from(folder),
++                        None => std::path::Path::new(path.as_deref().ok_or("Save this project first, or choose an export folder")?)
++                            .parent()
++                            .ok_or("No project folder")?
++                            .join("导出图片"),
++                    };
++                    if !output.is_absolute() {
++                        return Err("Choose an absolute export folder".to_string());
++                    }
++                    let bytes = photocraft_io::export(&doc, "png", &photocraft_io::ExportOptions::default()).map_err(|e| e.to_string())?;
++                    if flag.load(Ordering::Relaxed) {
++                        return Err("Cancelled".to_string());
++                    }
++                    write_unique(&output, &file_stem(path.as_deref().unwrap_or(&doc.name)), &bytes.bytes)
++                })()
++                .map_err(|e: String| format!("{}: {e}", doc.name));
++                let _ = tx.send(Event::Item(result));
++            }
++            let _ = tx.send(Event::Finished);
++        });
++        Ok(json!({"started":true}))
++    }
++}
++
++pub(crate) fn choose(app: &mut PhotocraftApp, all: bool) -> Result<Value, String> {
++    app.ask_folder(move |app, folder| start(app, all, Some(folder)))
++}
++
++pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
++    let Some(state) = app.image_export.as_mut() else {
++        return;
++    };
++    if let Some(rx) = &state.receiver {
++        loop {
++            match rx.try_recv() {
++                Ok(Event::Item(result)) => {
++                    state.done += 1;
++                    match result {
++                        Ok(p) => state.files.push(p),
++                        Err(e) => state.errors.push(e),
++                    }
++                }
++                Ok(Event::Finished) => {
++                    state.busy = false;
++                    break;
++                }
++                Err(mpsc::TryRecvError::Empty) => break,
++                Err(mpsc::TryRecvError::Disconnected) => {
++                    state.busy = false;
++                    break;
++                }
++            }
++        }
++    }
++    let mut open = true;
++    egui::Window::new(l("Export images")).open(&mut open).default_width(560.0).show(ctx, |ui| {
++        ui.label(l("Full visible canvas · PNG · existing files are kept"));
++        ui.label(format!("{} / {}", state.done, state.total));
++        ui.horizontal(|ui| {
++            ui.label(l("Exported"));
++            ui.label(state.files.len().to_string());
++            ui.label(l("Failed"));
++            ui.label(state.errors.len().to_string());
++        });
++        ui.add(egui::ProgressBar::new(state.done as f32 / state.total.max(1) as f32));
++        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
++            for path in &state.files {
++                ui.label(path);
++            }
++            for error in &state.errors {
++                ui.colored_label(
++                    ui.visuals().error_fg_color,
++                    error.replace("Save this project first, or choose an export folder", &l("Save this project first, or choose an export folder")),
++                );
++            }
++        });
++        if state.busy && ui.button(l("Cancel")).clicked() {
++            state.cancel.store(true, Ordering::Relaxed);
++        }
++        if !state.busy {
++            ui.label(l(if state.cancel.load(Ordering::Relaxed) {
++                "Export cancelled; completed images are kept"
++            } else {
++                "Export finished; completed images are kept"
++            }));
++        }
++    });
++    if state.busy {
++        ctx.request_repaint_after(std::time::Duration::from_millis(100));
++    }
++    if !open {
++        state.cancel.store(true, Ordering::Relaxed);
++        app.image_export = None;
++    }
++}
 diff --git a/crates/ui-egui/src/input/shortcuts.rs b/crates/ui-egui/src/input/shortcuts.rs
 index 509bfbd27..8176aa44e 100644
 --- a/crates/ui-egui/src/input/shortcuts.rs
@@ -3153,24 +3493,26 @@ index 509bfbd27..8176aa44e 100644
      if !held {
          ctx.data_mut(|d| d.remove_temp::<std::collections::BTreeSet<Key>>(forwarded_down_id()));
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 8165b8a41..6e9648be5 100644
+index 8165b8a41..3298ca89e 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
-@@ -26,6 +26,9 @@ macro_rules! tl {
+@@ -26,6 +26,10 @@ macro_rules! tl {
  }
  mod brush_mode_menu;
  pub mod canvas;
 +pub mod codex_ai;
 +mod plugin_i18n;
 +pub mod long_cut;
++pub(crate) mod image_export;
  pub mod control;
  pub mod dialogs;
  pub mod dock;
-@@ -672,6 +675,7 @@ pub struct PhotocraftApp {
+@@ -672,6 +676,8 @@ pub struct PhotocraftApp {
      pub(crate) discard: Option<discard_ui::Prompt>,
      /// The Open or Save dialog in progress, and the action waiting on it (see `file_dialog`).
      pub(crate) file_dialog: Option<file_dialog::Pending>,
 +    pub(crate) long_cut: Option<long_cut::State>,
++    pub(crate) image_export: Option<image_export::State>,
      /// A Save As to a layered TIFF parked behind the TIFF Options prompt (see `tiff_options_ui`).
      pub(crate) tiff_options: Option<tiff_options_ui::Prompt>,
      /// Where each document was last saved or exported to through a dialog (#1826): its next Save
@@ -3780,27 +4122,31 @@ index 000000000..ba1715a80
 +    }
 +}
 diff --git a/crates/ui-egui/src/menu_catalog.rs b/crates/ui-egui/src/menu_catalog.rs
-index 1d9802862..e4227ef2e 100644
+index 1d9802862..ffb87c310 100644
 --- a/crates/ui-egui/src/menu_catalog.rs
 +++ b/crates/ui-egui/src/menu_catalog.rs
-@@ -19,6 +19,8 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
+@@ -19,6 +19,11 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
      (&["File"], "Revert", Some("F12"), "file.revert"),
      (&["File"], "---", None, "---"),
      (&["File", "Export"], "Quick Export as PNG", None, "file.export.quickExportAsPng"),
 +    (&["File", "Export"], "Export to Clipboard", None, "file.export.clipboard"),
 +    (&["File", "Export"], "Long image cutter", None, "tools.longCut.open"),
++    (&["File", "Export"], "Export current image", None, "tools.imageExport.current"),
++    (&["File", "Export"], "Export all open images", None, "tools.imageExport.all"),
++    (&["File", "Export"], "Export all to folder", None, "tools.imageExport.chooseAll"),
      (&["File", "Export"], "Export As…", Some("Cmd+Alt+Shift+W"), "file.export.exportAs"),
      (&["File", "Export"], "Export Preferences…", None, "file.export.exportPreferences"),
      (&["File", "Export"], "---", None, "---"),
 diff --git a/crates/ui-egui/src/menus/state.rs b/crates/ui-egui/src/menus/state.rs
-index c932ca092..c97f46942 100644
+index c932ca092..abe9a459b 100644
 --- a/crates/ui-egui/src/menus/state.rs
 +++ b/crates/ui-egui/src/menus/state.rs
-@@ -68,6 +68,8 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
+@@ -68,6 +68,9 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
          i if i.starts_with("window.theme.") => true,
          // Interface brightness works with or without a document, as in Photoshop.
          "view.darkenInterface" | "view.lightenInterface" => true,
 +        "tools.longCut.open" => app.session.active().is_some(),
++        "tools.imageExport.current" | "tools.imageExport.all" | "tools.imageExport.chooseCurrent" | "tools.imageExport.chooseAll" => app.session.active().is_some(),
 +        "file.export.clipboard" => app.session.active().is_some() && app.services.clipboard_set_image.is_some(),
          "file.save" | "file.saveAs" | "file.export.exportAs" | "file.export.quickExportAsPng" => {
              app.session.active().is_some() && app.services.export.is_some()
@@ -3934,7 +4280,7 @@ index a7ab70a76..3acdcc919 100644
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/panels/title_bar.rs b/crates/ui-egui/src/panels/title_bar.rs
-index fd760ec71..cb606e064 100644
+index fd760ec71..026aa6b9c 100644
 --- a/crates/ui-egui/src/panels/title_bar.rs
 +++ b/crates/ui-egui/src/panels/title_bar.rs
 @@ -8,6 +8,7 @@ use super::{PhotocraftApp, Sense, Tokens, icons, theme, vec2, widgets};
@@ -3945,11 +4291,13 @@ index fd760ec71..cb606e064 100644
      let t = Tokens::get(ui.ctx());
      let custom = app.custom_titlebar;
      let system = system_title_bar(app);
-@@ -94,14 +95,18 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+@@ -94,14 +95,20 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                      // (Preferences), then search (Edit › Search), and narrows the switcher
                      // (Window › Workspace) before anything runs over.
                      let room = ui.available_width();
 -                    let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
++                    let export_shown = room >= WORKSPACE_MIN + 2.0 * ICON_SLOT + COPY_SLOT + 235.0;
++                    let room = room - if export_shown { 130.0 } else { 0.0 };
 +                    let cutter_shown = room >= WORKSPACE_MIN + 2.0 * ICON_SLOT + COPY_SLOT + 105.0;
 +                    let room = room - if cutter_shown { 105.0 } else { 0.0 };
 +                    let copy_shown = room >= WORKSPACE_MIN + 2.0 * ICON_SLOT + COPY_SLOT;
@@ -3967,7 +4315,7 @@ index fd760ec71..cb606e064 100644
                      if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", tl!("Workspace"), &mut ws, &opts, ws_width) {
                          app.ui.workspace = ws;
                          crate::menus::apply_workspace(app);
-@@ -124,6 +129,23 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+@@ -124,6 +131,44 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                          }
                          button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
                      }
@@ -3988,10 +4336,31 @@ index fd760ec71..cb606e064 100644
 +                        app.ui.status = e;
 +                        app.ui.status_error = true;
 +                    }
++                    if export_shown {
++                        let enabled = app.session.active().is_some();
++                        ui.add_enabled_ui(enabled, |ui| {
++                            if ui.button(tl!("Export images")).on_hover_text(tl!("Export current image beside project")).clicked() {
++                                let _ = app.run("tools.imageExport.current", serde_json::json!({}));
++                            }
++                            ui.menu_button("...", |ui| {
++                                for (label, id) in [
++                                    ("Export current image", "tools.imageExport.current"),
++                                    ("Export all open images", "tools.imageExport.all"),
++                                    ("Export current to folder", "tools.imageExport.chooseCurrent"),
++                                    ("Export all to folder", "tools.imageExport.chooseAll"),
++                                ] {
++                                    if ui.button(crate::plugin_i18n::text(label)).clicked() {
++                                        ui.close();
++                                        let _ = app.run(id, serde_json::json!({}));
++                                    }
++                                }
++                            });
++                        });
++                    }
                      if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                  };
                  free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
-@@ -199,6 +221,15 @@ const TITLE_GAP: f32 = 16.0;
+@@ -199,6 +244,15 @@ const TITLE_GAP: f32 = 16.0;
  const WORKSPACE_MIN: f32 = 90.0;
  
  const ICON_SLOT: f32 = 34.0;
@@ -4007,7 +4376,7 @@ index fd760ec71..cb606e064 100644
  
  /// Left edge for a title `width` wide: centred on `center` when it fits in the free gap from
  /// `left` to `right` (the menus' and the controls' facing edges, whichever side each is on),
-@@ -213,3 +244,49 @@ pub(super) fn title_x(center: f32, left: f32, right: f32, width: f32) -> Option<
+@@ -213,3 +267,49 @@ pub(super) fn title_x(center: f32, left: f32, right: f32, width: f32) -> Option<
      }
      Some((center - width / 2.0).clamp(lo, hi))
  }

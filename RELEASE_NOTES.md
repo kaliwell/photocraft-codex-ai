@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 标题栏新增「导出图片」及下拉菜单：当前工程一键导出完整画布 PNG 到同级 `导出图片` 文件夹；批量导出所有已打开工程；当前/全部导出到指定文件夹。后台逐张处理、进度与失败列表、取消保留已完成图片；重名自动编号，不覆盖工程及已有图片。
+- Added title-bar PNG export for the current or all open projects, sibling or chosen folders, background progress, cancellation and collision-safe filenames. Exports preserve the source projects and selection.
+
 - PSD 比例适配增加实际预览视觉审查与有界自动修正；修复剪贴图片完整尺寸误当卡片可见尺寸，支持混合文件夹内标注与卡片分别布局。
 - Visually review native reflow drafts with bounded corrections; respect clipped visible bounds and separate independent callouts from cards in mixed folders.
 

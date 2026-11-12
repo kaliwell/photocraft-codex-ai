@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+The title bar **Export images** button exports the current full visible canvas as PNG to an `导出图片` folder beside its project. Its dropdown exports all open projects, or the current/all projects to a chosen folder. Existing files are preserved with numbered filenames. Batch export runs in the background and can be cancelled while keeping completed images. Unsaved projects ask for a folder when exported individually; batch export beside projects skips unsaved documents with an explanation.
+
 [中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)
 
 **Unified development showcase · 2026-11-10**: detail-preserving selection edits, ratio adaptation, background outpainting and audit fixes. Generation, selection editing and object removal remain the main tools.
