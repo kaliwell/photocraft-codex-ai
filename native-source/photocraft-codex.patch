@@ -2804,7 +2804,7 @@ index 52149ab8e..21ba1a408 100644
  fn filtered_picker_requests_only_the_given_extensions() {
      let (mut app, open, _) = app();
 diff --git a/crates/ui-egui/src/i18n/zh-hans.tsv b/crates/ui-egui/src/i18n/zh-hans.tsv
-index ef2788221..9e8fc1025 100644
+index ef2788221..ad3ce725a 100644
 --- a/crates/ui-egui/src/i18n/zh-hans.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hans.tsv
 @@ -1,4 +1,10 @@
@@ -2818,7 +2818,7 @@ index ef2788221..9e8fc1025 100644
  # context <TAB> English source <TAB> Simplified Chinese translation
  #
  # Empty context: plain UI text. @id: stable command ID. @plural: one|other source
-@@ -3202,3 +3208,196 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3202,3 +3208,199 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	纯色
  	Tint Color	色调颜色
  	Edit Brush…	编辑画笔…
@@ -3015,11 +3015,14 @@ index ef2788221..9e8fc1025 100644
 +	Failed	失败
 +
 +	Save this project first, or choose an export folder	请先保存工程，或选择指定导出文件夹
++
++	Full visible canvas; existing files are kept	完整可见画布，重名自动编号
++	JPEG does not support transparency	JPEG 不支持透明背景
 diff --git a/crates/ui-egui/src/i18n/zh-hant.tsv b/crates/ui-egui/src/i18n/zh-hant.tsv
-index c0bb1a3ab..1b80bc2d3 100644
+index c0bb1a3ab..950740fe1 100644
 --- a/crates/ui-egui/src/i18n/zh-hant.tsv
 +++ b/crates/ui-egui/src/i18n/zh-hant.tsv
-@@ -3158,3 +3158,204 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
+@@ -3158,3 +3158,207 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
  	Solid Color	純色
  	Tint Color	色調顏色
  	Edit Brush…	編輯筆刷…
@@ -3224,13 +3227,16 @@ index c0bb1a3ab..1b80bc2d3 100644
 +	Failed	失败
 +
 +	Save this project first, or choose an export folder	请先保存工程，或选择指定导出文件夹
++
++	Full visible canvas; existing files are kept	完整可见画布，重名自动编号
++	JPEG does not support transparency	JPEG 不支持透明背景
 diff --git a/crates/ui-egui/src/image_export.rs b/crates/ui-egui/src/image_export.rs
 new file mode 100644
-index 000000000..b3667b5a5
+index 000000000..5819097c7
 --- /dev/null
 +++ b/crates/ui-egui/src/image_export.rs
-@@ -0,0 +1,250 @@
-+//! Flat PNG exports from immutable document snapshots; never save or switch projects.
+@@ -0,0 +1,350 @@
++//! Flat image exports from immutable document snapshots; never save or switch projects.
 +use crate::{PhotocraftApp, plugin_i18n::text as l};
 +use serde_json::Value;
 +#[cfg(not(target_arch = "wasm32"))]
@@ -3241,8 +3247,65 @@ index 000000000..b3667b5a5
 +    mpsc,
 +};
 +
++#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
++#[serde(default)]
++pub struct Settings {
++    extension: String,
++    quality: u8,
++    webp_lossless: bool,
++}
++impl Default for Settings {
++    fn default() -> Self {
++        Self { extension: "png".into(), quality: 90, webp_lossless: true }
++    }
++}
++impl Settings {
++    fn format(&self) -> Result<photocraft_codecs::Format, String> {
++        photocraft_codecs::from_extension(&self.extension).filter(|f| f.caps().write).ok_or_else(|| "Unsupported export format".into())
++    }
++    #[cfg(not(target_arch = "wasm32"))]
++    fn options(&self) -> photocraft_io::ExportOptions {
++        let mut options = photocraft_io::ExportOptions::default();
++        options.encode.jpeg_quality = self.quality.clamp(1, 100);
++        options.encode.webp_quality = self.quality.clamp(1, 100);
++        options.encode.webp_lossless = self.webp_lossless;
++        options
++    }
++}
++
++pub(crate) fn settings_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
++    let settings = &mut app.ui.image_export_settings;
++    let format = settings.format().unwrap_or(photocraft_codecs::Format::Png);
++    if settings.format().is_err() {
++        settings.extension = "png".into();
++    }
++    ui.menu_button(format!("{}: {}", l("Format"), format.name()), |ui| {
++        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
++            for format in photocraft_codecs::Format::ALL.into_iter().filter(|f| f.caps().write) {
++                if let Some(ext) = format.extensions().first() {
++                    ui.selectable_value(&mut settings.extension, (*ext).into(), format.name());
++                }
++            }
++        });
++    });
++    let format = settings.format().unwrap_or(photocraft_codecs::Format::Png);
++    if format == photocraft_codecs::Format::WebP {
++        ui.checkbox(&mut settings.webp_lossless, l("Lossless"));
++    }
++    if matches!(format, photocraft_codecs::Format::Jpeg | photocraft_codecs::Format::Avif)
++        || (format == photocraft_codecs::Format::WebP && !settings.webp_lossless)
++    {
++        ui.add(egui::Slider::new(&mut settings.quality, 1..=100).text(l("Quality")));
++    }
++    if format == photocraft_codecs::Format::Jpeg {
++        ui.label(l("JPEG does not support transparency"));
++    }
++    ui.separator();
++}
++
 +#[derive(Default)]
 +pub(crate) struct State {
++    format_name: String,
 +    receiver: Option<mpsc::Receiver<Event>>,
 +    cancel: Arc<AtomicBool>,
 +    busy: bool,
@@ -3265,14 +3328,54 @@ index 000000000..b3667b5a5
 +    }
 +
 +    #[test]
++    fn settings_reject_import_only_formats_and_preserve_defaults() {
++        for extension in ["heic", "xcf", "pcx", "../../bad", "psd"] {
++            assert!(Settings { extension: extension.into(), ..Default::default() }.format().is_err());
++        }
++        let default: Settings = serde_json::from_str("{}").unwrap();
++        assert_eq!(default.extension, "png");
++        assert_eq!(default.quality, 90);
++        let restored: Settings =
++            serde_json::from_str(&serde_json::to_string(&Settings { extension: "jpg".into(), quality: 98, webp_lossless: false }).unwrap()).unwrap();
++        assert_eq!(restored.format().unwrap(), photocraft_codecs::Format::Jpeg);
++        assert_eq!(restored.options().encode.jpeg_quality, 98);
++    }
++
++    #[test]
++    fn selected_formats_use_real_encoders_and_matching_extensions() {
++        let folder = std::env::temp_dir().join(format!(
++            "photocraft-formats-test-{}-{}",
++            std::process::id(),
++            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
++        ));
++        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
++        app.run("file.new", json!({"width":32,"height":48})).unwrap();
++        for extension in ["png", "jpg", "webp", "tif", "bmp", "gif"] {
++            app.ui.image_export_settings.extension = extension.into();
++            app.image_export = None;
++            start(&mut app, false, Some(folder.to_string_lossy().into())).unwrap();
++            let rx = app.image_export.as_ref().unwrap().receiver.as_ref().unwrap();
++            let Event::Item(result) = rx.recv_timeout(std::time::Duration::from_secs(30)).unwrap() else { panic!("missing output") };
++            let path = result.unwrap();
++            assert!(path.ends_with(&format!(".{extension}")));
++            let bytes = std::fs::read(&path).unwrap();
++            let doc = photocraft_io::import(&path, &bytes).unwrap().document;
++            assert_eq!(doc.size.width, 32);
++            assert_eq!(doc.size.height, 48);
++            assert!(matches!(rx.recv_timeout(std::time::Duration::from_secs(30)).unwrap(), Event::Finished));
++        }
++        std::fs::remove_dir_all(folder).unwrap();
++    }
++
++    #[test]
 +    fn repeated_exports_preserve_existing_files() {
 +        let folder = std::env::temp_dir().join(format!(
 +            "photocraft-export-test-{}-{}",
 +            std::process::id(),
 +            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
 +        ));
-+        let first = write_unique(&folder, "poster", b"first").unwrap();
-+        let second = write_unique(&folder, "poster", b"second").unwrap();
++        let first = write_unique(&folder, "poster", "png", b"first").unwrap();
++        let second = write_unique(&folder, "poster", "png", b"second").unwrap();
 +        assert!(second.ends_with("poster_2.png"));
 +        assert_eq!(std::fs::read(first).unwrap(), b"first");
 +        assert_eq!(std::fs::read(second).unwrap(), b"second");
@@ -3339,11 +3442,11 @@ index 000000000..b3667b5a5
 +}
 +
 +#[cfg(not(target_arch = "wasm32"))]
-+fn write_unique(folder: &std::path::Path, stem: &str, bytes: &[u8]) -> Result<String, String> {
++fn write_unique(folder: &std::path::Path, stem: &str, extension: &str, bytes: &[u8]) -> Result<String, String> {
 +    use std::{fs, io::Write};
 +    fs::create_dir_all(folder).map_err(|e| e.to_string())?;
 +    for i in 1..=10000 {
-+        let filename = if i == 1 { format!("{stem}.png") } else { format!("{stem}_{i}.png") };
++        let filename = if i == 1 { format!("{stem}.{extension}") } else { format!("{stem}_{i}.{extension}") };
 +        let path = folder.join(filename);
 +        let mut file = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
 +            Ok(f) => f,
@@ -3372,12 +3475,15 @@ index 000000000..b3667b5a5
 +            return Err(l("Please wait for the current task to finish"));
 +        }
 +        let active = app.session.active_index().ok_or("No document")?;
++        let settings = app.ui.image_export_settings.clone();
++        let format = settings.format()?;
++        let extension = *format.extensions().first().ok_or("No export extension")?;
 +        let jobs: Vec<_> =
 +            app.session.documents().iter().enumerate().filter(|(i, _)| all || *i == active).map(|(_, s)| (s.doc.clone(), s.path.clone())).collect();
 +        let (tx, rx) = mpsc::channel();
 +        let cancel = Arc::new(AtomicBool::new(false));
 +        let flag = cancel.clone();
-+        app.image_export = Some(State { receiver: Some(rx), cancel, busy: true, total: jobs.len(), ..Default::default() });
++        app.image_export = Some(State { format_name: format.name().into(), receiver: Some(rx), cancel, busy: true, total: jobs.len(), ..Default::default() });
 +        std::thread::spawn(move || {
 +            for (doc, path) in jobs {
 +                if flag.load(Ordering::Relaxed) {
@@ -3394,11 +3500,11 @@ index 000000000..b3667b5a5
 +                    if !output.is_absolute() {
 +                        return Err("Choose an absolute export folder".to_string());
 +                    }
-+                    let bytes = photocraft_io::export(&doc, "png", &photocraft_io::ExportOptions::default()).map_err(|e| e.to_string())?;
++                    let bytes = photocraft_io::export(&doc, extension, &settings.options()).map_err(|e| e.to_string())?;
 +                    if flag.load(Ordering::Relaxed) {
 +                        return Err("Cancelled".to_string());
 +                    }
-+                    write_unique(&output, &file_stem(path.as_deref().unwrap_or(&doc.name)), &bytes.bytes)
++                    write_unique(&output, &file_stem(path.as_deref().unwrap_or(&doc.name)), extension, &bytes.bytes)
 +                })()
 +                .map_err(|e: String| format!("{}: {e}", doc.name));
 +                let _ = tx.send(Event::Item(result));
@@ -3441,7 +3547,7 @@ index 000000000..b3667b5a5
 +    }
 +    let mut open = true;
 +    egui::Window::new(l("Export images")).open(&mut open).default_width(560.0).show(ctx, |ui| {
-+        ui.label(l("Full visible canvas · PNG · existing files are kept"));
++        ui.label(format!("{} · {}", state.format_name, l("Full visible canvas; existing files are kept")));
 +        ui.label(format!("{} / {}", state.done, state.total));
 +        ui.horizontal(|ui| {
 +            ui.label(l("Exported"));
@@ -4280,7 +4386,7 @@ index a7ab70a76..3acdcc919 100644
  fn mask_toggle_label_follows_history_and_selected_layer() {
      let mut s = photocraft_engine::Session::new();
 diff --git a/crates/ui-egui/src/panels/title_bar.rs b/crates/ui-egui/src/panels/title_bar.rs
-index fd760ec71..026aa6b9c 100644
+index fd760ec71..13b0e1d6e 100644
 --- a/crates/ui-egui/src/panels/title_bar.rs
 +++ b/crates/ui-egui/src/panels/title_bar.rs
 @@ -8,6 +8,7 @@ use super::{PhotocraftApp, Sense, Tokens, icons, theme, vec2, widgets};
@@ -4315,7 +4421,7 @@ index fd760ec71..026aa6b9c 100644
                      if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", tl!("Workspace"), &mut ws, &opts, ws_width) {
                          app.ui.workspace = ws;
                          crate::menus::apply_workspace(app);
-@@ -124,6 +131,44 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+@@ -124,6 +131,45 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                          }
                          button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
                      }
@@ -4343,6 +4449,7 @@ index fd760ec71..026aa6b9c 100644
 +                                let _ = app.run("tools.imageExport.current", serde_json::json!({}));
 +                            }
 +                            ui.menu_button("...", |ui| {
++                                crate::image_export::settings_menu(app, ui);
 +                                for (label, id) in [
 +                                    ("Export current image", "tools.imageExport.current"),
 +                                    ("Export all open images", "tools.imageExport.all"),
@@ -4360,7 +4467,7 @@ index fd760ec71..026aa6b9c 100644
                      if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                  };
                  free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
-@@ -199,6 +244,15 @@ const TITLE_GAP: f32 = 16.0;
+@@ -199,6 +245,15 @@ const TITLE_GAP: f32 = 16.0;
  const WORKSPACE_MIN: f32 = 90.0;
  
  const ICON_SLOT: f32 = 34.0;
@@ -4376,7 +4483,7 @@ index fd760ec71..026aa6b9c 100644
  
  /// Left edge for a title `width` wide: centred on `center` when it fits in the free gap from
  /// `left` to `right` (the menus' and the controls' facing edges, whichever side each is on),
-@@ -213,3 +267,49 @@ pub(super) fn title_x(center: f32, left: f32, right: f32, width: f32) -> Option<
+@@ -213,3 +268,49 @@ pub(super) fn title_x(center: f32, left: f32, right: f32, width: f32) -> Option<
      }
      Some((center - width / 2.0).clamp(lo, hi))
  }
@@ -4647,10 +4754,10 @@ index 000000000..b4ba49d40
 +    }
 +}
 diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
-index c18a418c4..a361e5bb5 100644
+index c18a418c4..204d9777f 100644
 --- a/crates/ui-egui/src/state.rs
 +++ b/crates/ui-egui/src/state.rs
-@@ -204,6 +204,11 @@ pub struct DocWindow {
+@@ -204,6 +204,13 @@ pub struct DocWindow {
  
  #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
  pub struct UiState {
@@ -4658,15 +4765,18 @@ index c18a418c4..a361e5bb5 100644
 +    #[serde(default)]
 +    pub codex_ai_prompt: String,
 +    #[serde(default)]
++    pub image_export_settings: crate::image_export::Settings,
++    #[serde(default)]
 +    pub codex_layout_options: serde_json::Value,
      pub tool: Tool,
      /// The last tool used in each shortcut group (the tools sharing a key, [`Tool::key`]), at most
      /// one per group: the group's key brings it back, as in Photoshop (#2608).
-@@ -519,6 +524,8 @@ pub struct UiState {
+@@ -519,6 +526,9 @@ pub struct UiState {
  impl Default for UiState {
      fn default() -> Self {
          Self {
 +            codex_ai_prompt: String::new(),
++            image_export_settings: Default::default(),
 +            codex_layout_options: serde_json::Value::Null,
              tool: Tool::Move,
              group_tools: Vec::new(),

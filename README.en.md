@@ -1,6 +1,6 @@
 # PhotoCraft · Codex AI
 
-The title bar **Export images** button exports the current full visible canvas as PNG to an `导出图片` folder beside its project. Its dropdown exports all open projects, or the current/all projects to a chosen folder. Existing files are preserved with numbered filenames. Batch export runs in the background and can be cancelled while keeping completed images. Unsaved projects ask for a folder when exported individually; batch export beside projects skips unsaved documents with an explanation.
+The title bar **Export images** button exports the current full visible canvas to an `导出图片` folder beside its project. Its `...` menu selects PNG (default), JPEG, WebP, TIFF, BMP, GIF or other image formats writable by the current build, with JPEG quality and WebP lossless/lossy options. The same settings apply to current/all-project exports and chosen folders. Existing files are preserved with numbered filenames. Batch export runs in the background and can be cancelled while keeping completed images. Unsaved projects ask for a folder when exported individually; batch export beside projects skips unsaved documents with an explanation.
 
 [中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)
 

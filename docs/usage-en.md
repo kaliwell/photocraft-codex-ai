@@ -2,7 +2,7 @@
 
 ## Quick image export
 
-Click **Export images** in the title bar to export the current full canvas as PNG into an `导出图片` folder beside the project. The adjacent `...` menu exports all open projects or lets you choose an output folder for the current/all projects, including unsaved documents. Filename collisions are numbered automatically. Progress lists successes and failures; cancellation keeps completed images.
+Click **Export images** in the title bar to export the current full canvas into an `导出图片` folder beside the project. In the adjacent `...` menu, choose a format (PNG by default; JPEG, WebP, TIFF, BMP, GIF and other writable formats), then export the current/all projects or choose a folder, including for unsaved documents. JPEG quality is adjustable and JPEG has no transparency. WebP defaults to lossless; lossy mode exposes quality. Filename collisions are numbered automatically. Progress lists successes and failures; cancellation keeps completed images.
 
 [中文指南](usage-zh.md) · [Back to README](../README.en.md)
 

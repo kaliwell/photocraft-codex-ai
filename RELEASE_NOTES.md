@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 快速导出支持格式选择：动态读取当前构建可写的图片格式（PNG、JPG、WebP、TIFF、BMP、GIF 等），当前/批量及指定文件夹共用格式、JPEG 质量和 WebP 无损/有损设置，输出扩展名匹配实际编码。
+- Quick export now selects writable image formats from the native codec registry, with JPEG quality, WebP lossless/lossy settings and matching filename extensions for current/batch exports.
+
 - 标题栏新增「导出图片」及下拉菜单：当前工程一键导出完整画布 PNG 到同级 `导出图片` 文件夹；批量导出所有已打开工程；当前/全部导出到指定文件夹。后台逐张处理、进度与失败列表、取消保留已完成图片；重名自动编号，不覆盖工程及已有图片。
 - Added title-bar PNG export for the current or all open projects, sibling or chosen folders, background progress, cancellation and collision-safe filenames. Exports preserve the source projects and selection.
 
