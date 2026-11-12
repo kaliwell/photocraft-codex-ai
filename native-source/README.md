@@ -14,6 +14,6 @@ python build_native.py
 
 构建脚本强制嵌入固定翻译目录；`i18n-overlay.json` 保存自定义中文词条，不修改远程仓库。需要 Python 3.11+ 与 Rust/MSVC 工具链。源码位于 `research/photocraft-0.23`，独立编译缓存位于 `target-native-023`，输出 `native-0.23`。
 
-本机独立安装为 `PhotoCraft-0.23.0-Codex-Isolated`，使用 17923 / 17924 端口及 `.photocraft-023-data` 工程旁文件夹。详见 [隔离说明](../ISOLATION.md)。首次使用独立 Codex 登录目录，不复制旧版凭据。
+本机独立安装为 `PhotoCraft-0.23.0-Codex-Isolated`，使用 17923 / 17924 端口及 `.photocraft-023-data` 工程旁文件夹。详见 [隔离说明](../ISOLATION.md)。Codex 复用系统现有登录和配置，不强制设置独立 `CODEX_HOME`。
 
 保留上游许可证、NOTICE 和作者信息。翻译库许可证位于安装目录 `licenses/craft-i18n`；自定义词条沿用 MIT OR Apache-2.0 许可。

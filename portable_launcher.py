@@ -18,9 +18,6 @@ def main():
         print(json.dumps(maintain(ROOT/'runtime',force='--clean-cache' in sys.argv,dry_run='--clean-cache' not in sys.argv)))
         return
     env, _ = codex_environment()
-    # This edition has its own CLI sessions/configuration as well as editor state.
-    env['CODEX_HOME'] = str(ROOT / 'runtime/codex-home')
-    Path(env['CODEX_HOME']).mkdir(parents=True, exist_ok=True)
     flags = subprocess.CREATE_NO_WINDOW
     status = subprocess.run(codex_command() + ['login', 'status'], env=env, capture_output=True,
                             creationflags=flags)
