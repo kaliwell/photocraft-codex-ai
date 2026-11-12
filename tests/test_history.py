@@ -122,7 +122,11 @@ class HistoryTests(unittest.TestCase):
                 service.bridge.client.run.return_value={'active':0,'documents':[{'index':0,'name':'Demo','path':path}]}
             request={'document':{'index':0,'name':'Demo'}}
             active(first);a=worker.history_for(request);a.save({'prompt':'project one'})
-            self.assertEqual(a.root,Path(first+'.photocraft-data')/'history')
+            legacy=History(Path(first+'.photocraft-data')/'history')
+            legacy.save({'prompt':'legacy edition'})
+            self.assertEqual(len(a.list()),1)
+            self.assertEqual(legacy.list()[0]['prompt'],'legacy edition')
+            self.assertEqual(a.root,Path(first+'.photocraft-023-data')/'history')
             active(second);self.assertEqual(worker.history_for(request).list(),[])
             active(first);self.assertEqual(worker.history_for(request).list()[0]['prompt'],'project one')
             active(None)

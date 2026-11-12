@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+**此分支为 PhotoCraft 0.23.0 独立隔离版。** 安装目录、源码、配置、端口及工程历史与原 Unified 分开，桌面入口为「PhotoCraft 0.23 隔离版」。首次使用需独立登录 Codex。见 [隔离说明](ISOLATION.md)。
+
 [English](README.en.md) · [中文使用指南](docs/usage-zh.md) · [更新记录](RELEASE_NOTES.md)
 
 **统一开发版展示 · 2026-11-10**：包含局部编辑清晰度优化、比例自适应、背景扩图及审计修复。基本生图、局部修改和移除物体仍是主要功能。

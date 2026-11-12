@@ -12,7 +12,7 @@ THEMES = ['pro', 'proMedium', 'proLightGray', 'proLight', 'studio', 'studioLight
 
 
 def main():
-    c = ControlClient(17880, RUNTIME / 'control.token', timeout=60)
+    c = ControlClient(17924, RUNTIME / 'control.token', timeout=60)
     reports = []
     for width, height in [(1440, 900), (960, 720)]:
         c.call('ui.resize', width=width, height=height)

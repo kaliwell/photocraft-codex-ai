@@ -18,8 +18,8 @@ from .references import validate_references
 from .localization import english
 from .history import History
 
-API_PORT = 17879
-EDITOR_PORT = 17880
+API_PORT = 17923
+EDITOR_PORT = 17924
 
 
 class NativeWorker:
@@ -48,7 +48,7 @@ class NativeWorker:
         project=Path(path)
         if not project.is_absolute():
             raise ValueError('The project path must be absolute')
-        folder=project.with_name(project.name+'.photocraft-data')/'history'
+        folder=project.with_name(project.name+'.photocraft-023-data')/'history'
         key=str(folder)
         with self.lock:
             if key not in self.project_histories:
@@ -216,15 +216,13 @@ def handler(worker: NativeWorker, token: str):
 
 def main():
     parser = argparse.ArgumentParser(description='PhotoCraft Codex AI 原生选区工具栏')
-    upgraded = ROOT / 'native-0.20/photocraft.exe'
-    if not upgraded.is_file():
-        upgraded = ROOT / 'native-0.19/photocraft.exe'
+    upgraded = ROOT / 'native-0.23/photocraft.exe'
     build_info = upgraded.parent / 'BUILD_INFO.json'
     if build_info.is_file():
         executable = json.loads(build_info.read_text(encoding='utf-8')).get('executable', 'photocraft.exe')
         if executable in ('photocraft.exe', 'photocraft-next.exe'):
             upgraded = upgraded.with_name(executable)
-    parser.add_argument('--photocraft', default=str(upgraded if upgraded.is_file() else ROOT / 'native/photocraft.exe'))
+    parser.add_argument('--photocraft', default=str(upgraded))
     args = parser.parse_args()
     # Separate from the fallback Tk panel.
     singleton = panel_lock('native.lock')

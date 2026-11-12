@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 新增独立 PhotoCraft 0.23.0 分支与隔离安装：独立源码、编译缓存、编辑器配置、Python/插件副本、后台端口、Codex 会话目录及工程旁历史/切图命名空间。沿用原有 Unified 的功能，旧版保持独立。
+- 迁移至新版自动化读取结果和剪贴板结构；按固定提交嵌入外部翻译库，并叠加 191 条自定义中文翻译（简体/繁体分别保存）。
+
 - 快速导出支持格式选择：动态读取当前构建可写的图片格式（PNG、JPG、WebP、TIFF、BMP、GIF 等），当前/批量及指定文件夹共用格式、JPEG 质量和 WebP 无损/有损设置，输出扩展名匹配实际编码。
 - Quick export now selects writable image formats from the native codec registry, with JPEG quality, WebP lossless/lossy settings and matching filename extensions for current/batch exports.
 

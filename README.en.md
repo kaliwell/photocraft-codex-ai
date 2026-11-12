@@ -1,5 +1,7 @@
 # PhotoCraft · Codex AI
 
+**This branch is the standalone PhotoCraft 0.23.0 isolated edition.** It has separate source, runtime, profile, ports and project-history folders. Use the new desktop shortcut **PhotoCraft 0.23 隔离版**. A separate Codex sign-in is required on first use. See [Isolation details](ISOLATION.md).
+
 The title bar **Export images** button exports the current full visible canvas to an `导出图片` folder beside its project. Its `...` menu selects PNG (default), JPEG, WebP, TIFF, BMP, GIF or other image formats writable by the current build, with JPEG quality and WebP lossless/lossy options. The same settings apply to current/all-project exports and chosen folders. Existing files are preserved with numbered filenames. Batch export runs in the background and can be cancelled while keeping completed images. Unsaved projects ask for a folder when exported individually; batch export beside projects skips unsaved documents with an explanation.
 
 [中文](README.md) · [English guide](docs/usage-en.md) · [Release notes](RELEASE_NOTES.md)

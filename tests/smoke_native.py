@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--live', action='store_true')
     args = parser.parse_args()
-    client = ControlClient(17880, RUNTIME / 'control.token', timeout=60)
+    client = ControlClient(17924, RUNTIME / 'control.token', timeout=60)
     bridge = PhotoCraftBridge(client, RUNTIME / 'exchange', RUNTIME)
     bridge.new_image_from_pngs([(ROOT / 'examples/text-to-image.png').read_bytes()], 'Codex AI native demo', None)
     client.run('select.rect', x=60, y=850, width=300, height=240)

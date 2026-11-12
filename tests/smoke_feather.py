@@ -13,7 +13,7 @@ from photocraft_ai.service import Service
 
 
 def main():
-    c = ControlClient(17880, RUNTIME / 'control.token')
+    c = ControlClient(17924, RUNTIME / 'control.token')
     bridge = PhotoCraftBridge(c, RUNTIME / 'exchange', RUNTIME)
     previous = bridge.active_image()
     directory = RUNTIME / 'feather-smoke'

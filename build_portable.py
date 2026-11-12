@@ -6,7 +6,7 @@ import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = '0.4.0'
+VERSION = '0.23.0-isolated'
 output = ROOT / f'dist/photocraft-codex-ai-{VERSION}-windows-x64-local-node'
 output.mkdir(parents=True, exist_ok=False)
 python = output / 'python'
@@ -20,17 +20,17 @@ for pattern in ('pillow-11.3.0-cp313-cp313-win_amd64.whl','numpy-2.2.6-cp313-cp3
 (python / 'python313._pth').write_text('python313.zip\n.\n..\nLib/site-packages\nimport site\n', encoding='utf-8')
 for folder in ('photocraft_ai', 'vendor', 'native-source', 'docs'):
     shutil.copytree(ROOT / folder, output / folder, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-shutil.copytree(ROOT / 'native-0.20', output / 'native',
+shutil.copytree(ROOT / 'native-0.23', output / 'native-0.23',
                 ignore=shutil.ignore_patterns('photocraft.exe', 'photocraft-next.exe'))
-build_info = json.loads((output / 'native/BUILD_INFO.json').read_text())
+build_info = json.loads((output / 'native-0.23/BUILD_INFO.json').read_text())
 build_info['version'] = VERSION
 staged_executable = build_info.get('executable', 'photocraft.exe')
 assert staged_executable in ('photocraft.exe', 'photocraft-next.exe')
-shutil.copy2(ROOT / 'native-0.20' / staged_executable, output / 'native/photocraft.exe')
+shutil.copy2(ROOT / 'native-0.23' / staged_executable, output / 'native-0.23/photocraft.exe')
 build_info['executable'] = 'photocraft.exe'
-assert build_info['exe_sha256'] == hashlib.sha256((output / 'native/photocraft.exe').read_bytes()).hexdigest()
-assert build_info['photocraft_version'] == '0.20.1'
-(output / 'native/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')
+assert build_info['exe_sha256'] == hashlib.sha256((output / 'native-0.23/photocraft.exe').read_bytes()).hexdigest()
+assert build_info['photocraft_version'] == '0.23.0'
+(output / 'native-0.23/BUILD_INFO.json').write_text(json.dumps(build_info, indent=2), encoding='utf-8')
 for name in ('portable_launcher.py', 'cache-status.cmd', 'clean-cache.cmd', 'README.md', 'README.en.md', 'THIRD_PARTY.md', 'VALIDATION.md', 'RELEASE_NOTES.md'):
     shutil.copy2(ROOT / name, output / name)
 command = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0python\\python.exe" "%~dp0portable_launcher.py" %*\r\n'

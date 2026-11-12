@@ -20,7 +20,7 @@ class FixtureBackend:
 
 
 def main():
-    client = ControlClient(17880, RUNTIME / 'control.token')
+    client = ControlClient(17924, RUNTIME / 'control.token')
     bridge = PhotoCraftBridge(client, RUNTIME / 'exchange', RUNTIME)
     previous = bridge.active_image()
     raw = io.BytesIO()

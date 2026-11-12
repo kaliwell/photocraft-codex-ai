@@ -5,15 +5,17 @@ import json
 import shutil
 import subprocess
 import tomllib
+import os
 
 ROOT = Path(__file__).resolve().parent
-source = ROOT / 'research/photocraft-0.20'
-target = ROOT / 'research/photocraft/target'
+source = ROOT / 'research/photocraft-0.23'
+target = ROOT / 'target-native-023'
 if not (source / 'Cargo.toml').is_file():
     raise SystemExit('请先按 native-source/README.md 准备 PhotoCraft 源码。')
+env = {**os.environ, 'CRAFT_I18N_DIR': str(ROOT/'research/craft-i18n'), 'CRAFT_I18N_REQUIRED': '1'}
 subprocess.run(['cargo', 'build', '--locked', '-p', 'photocraft', '-j', '4',
-                '--config', str(ROOT / 'native-build.toml'), '--target-dir', str(target)], cwd=source, check=True)
-output = ROOT / 'native-0.20'
+                '--config', str(ROOT / 'native-build.toml'), '--target-dir', str(target)], cwd=source, env=env, check=True)
+output = ROOT / 'native-0.23'
 output.mkdir(exist_ok=True)
 binary = output / 'photocraft.exe'
 try:
@@ -25,7 +27,8 @@ except PermissionError:
 for name in ('LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md'):
     shutil.copy2(source / name, output / name)
 info = {'version': 'development', 'photocraft_version': tomllib.loads((source / 'Cargo.toml').read_text(encoding='utf-8'))['workspace']['package']['version'],
-        'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
+        'source_commit': '9963efcb2f04867b56c564f876befd412b6c3c4e',
+        'source_checkout_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
         'profile': 'development',
         'executable': binary.name,
         'exe_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),

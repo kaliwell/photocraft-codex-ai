@@ -11,7 +11,7 @@ from .bridge import ControlClient, PhotoCraftBridge
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / 'runtime'
-PORT = 17878
+PORT = 17925
 
 
 def panel_lock(name='panel.lock'):

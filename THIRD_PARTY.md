@@ -46,3 +46,6 @@ commit `c05124bca29def76e35b2293245161c34da75eba`, and integrated into the 0.20.
 The unified development build also adapts Userfull Tools v0.3.8's native cutter,
 clipboard export and language helpers, and its v0.3.7 image-size adaptation with
 reference support. These are hosted in the same PhotoCraft process.
+# Isolated edition translation catalogs
+
+The PhotoCraft 0.23.0 isolated edition embeds `storytold/craft-i18n` at commit `e02939ef009218e81c44e8ec001fbb7603461de4` with local integration translations. Its MIT and Apache-2.0 licenses and attribution are included under `licenses/craft-i18n` in the installed edition.
