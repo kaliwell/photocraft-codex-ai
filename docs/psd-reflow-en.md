@@ -10,7 +10,7 @@ Resize an existing PSD / PSB to specified dimensions and save a new PSD copy. Us
 
 1. Open a PSD / PSB, make a selection to reveal the AI toolbar, and expand **PSD tools**. Ratio adaptation processes the whole active project; the selection is not a crop boundary.
 2. Set the target width and height, for example **1500 × 2000**. To edit dimensions, choose **New document** and turn off **Use reference image dimensions**.
-3. Click **Adapt PSD ratio** and wait for layout analysis or background outpainting. A new document opens and the status shows its saved path; review it and save it to your project folder.
+3. Click **Adapt PSD ratio** and wait for layout analysis or background outpainting. A new document opens, saved beside the source project. The status shows its saved path; review it and continue editing or use Save As.
 
 Existing fonts and DPI are retained. Title/subtitle/body settings apply to new PSD base creation, rather than replacing fonts throughout an existing project.
 
@@ -46,3 +46,6 @@ Automatic pruning uses **14 days and a 2 GiB intermediate-cache limit**. Generat
 The interface uses an original geometric project sample. The homepage retains separate generation, selection-editing and object-removal animations. The PSD drawer animation replays a pre-analyzed layout locally without a new remote generation request; playback does not measure model latency. No personal product images or projects are published.
 
 These features describe the current unified development source and local updates. The published **v0.4.0 ZIP predates some features**. [Validation](../VALIDATION.md) · [Release notes](../RELEASE_NOTES.md)
+
+
+Ratio-adapted PSDs default to the source project folder, e.g. `Poster.psb` → `Poster_自适应_1500x2000.psd`. Existing results receive numbered suffixes instead of being overwritten. The new document adopts this save path for subsequent Ctrl+S. Unsaved projects retain temporary output; failure to write beside the project reports an error and retains the internal export.

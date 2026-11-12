@@ -329,3 +329,11 @@ Native UI navigated All tools, PSD, Detail page and inline settings; assertions 
 - Measured affine mapping from original crop to generated crop: x scale 1.01653, y scale 1.01051, small shear and translation; maximum corner displacement 19.14 pixels. Context ECC 0.99561; mean grayscale context difference improved from 14.99 to 3.24 on the 0–255 intensity scale. These are registration measurements, not an assurance of exact generated text.
 - Raw-image registration and coordinate inversion are combined into one Lanczos warp; reduced images are used only to estimate alignment. Whole-canvas/featureless cases and legacy jobs without context cannot guarantee geometric correction.
 - Pinned Windows wheels: NumPy 2.2.6 and opencv-python-headless 4.12.0.88, downloaded from PyPI with SHA-256 verification; portable builds extract their bundled libraries/license notices.
+
+
+## Sibling reflow output (2026-11-12)
+
+- 114 Python tests passed, including collision-safe PSD/PSB sibling names and partial-copy cleanup.
+- Native QA exported 041500.psb through a restricted exchange root, copied the completed PSD beside the original, bound the open document to the final path, reopened it with all top-level layers retained, and verified unchanged source SHA-256. A second run preserved the previous result and used a numbered filename. Successful publication removed its temporary exchange PSD.
+- Confirmed unsaved-document fallback to exchange and rejection of associating the result with the source file. No remote model/image-generation request was needed.
+- Desktop build, all-target Clippy with warnings denied, wasm check and layering check passed. Native patch reverse-apply check passed.

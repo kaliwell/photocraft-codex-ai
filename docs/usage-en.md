@@ -83,7 +83,7 @@ The geometric demo artwork was made for this project. Screenshots contain no use
 
 ## 6. Reference to PSD base layout
 
-**Adapt an existing PSD ratio**: open the PSD, expand PSD tools, choose New document, disable reference dimensions and enter the target width/height or ratio. Choose **Adapt PSD ratio**. This reads the current document's layer structure and content, rather than attached references. AI positions visible content groups and scales them uniformly; named color backgrounds, gray columns and full-length dividers adapt separately. A new copy is saved to `runtime/exchange/reflow-<job-id>.psd`, preserving the source, DPI, editable text, smart objects and groups. Reconstruction font presets are not applied.
+**Adapt an existing PSD ratio**: open the PSD, expand PSD tools, choose New document, disable reference dimensions and enter the target width/height or ratio. Choose **Adapt PSD ratio**. This reads the current document's layer structure and content, rather than attached references. AI positions visible content groups and scales them uniformly; named color backgrounds, gray columns and full-length dividers adapt separately. A new copy is saved beside the source project as `<project>_自适应_<width>x<height>.psd` (numbered on collision; unsaved projects use temporary output), preserving the source, DPI, editable text, smart objects and groups. Reconstruction font presets are not applied.
 
 Designed for layered PSDs. A single flattened layer can only be fitted uniformly, not decomposed into its internal subjects and text. Review complex masks, clipping relationships and background detection. Changed source documents are rejected before import; plans remain in the job directory. Up to 80 visible content groups are supported, within the existing pixel/dimension guards.
 
@@ -146,3 +146,6 @@ Text, logos and textures inside the selection may still be redrawn by the model.
 New tasks retain unchanged selection context. Import estimates small position, scale and skew changes, combines registration with the crop mapping, and samples the raw result once. The changed object is excluded from registration.
 
 Unreliable registration, excessive changes or inconsistent context regions retain the generated file and refuse automatic import. Try a smaller selection. Whole-canvas edits and featureless context cannot guarantee automatic correction; review internal geometry and lettering. New jobs record `edit-alignment.json`; legacy jobs without context retain their original mapping behavior.
+
+
+Ratio-adapted PSDs default to the source project folder, e.g. `Poster.psb` → `Poster_自适应_1500x2000.psd`. Existing results receive numbered suffixes instead of being overwritten. The new document adopts this save path for subsequent Ctrl+S. Unsaved projects retain temporary output; failure to write beside the project reports an error and retains the internal export.

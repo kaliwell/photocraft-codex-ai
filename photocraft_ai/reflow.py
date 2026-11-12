@@ -109,6 +109,7 @@ def apply_reflow(bridge,prepared,path):
     plan=validate_plan(json.loads(Path(path).read_text(encoding='utf8')),units,width,height)
     docs=bridge.documents();match=next((d for d in docs if d['index']==prepared.target.index and d['name']==prepared.target.name),None)
     if not match or int(match.get('revision',0))!=prepared.revision:raise ValueError('Current document changed; layout result retained')
+    if match.get('path')!=info.get('path'):raise ValueError('Project save location changed; retry ratio adaptation')
     bridge.activate(prepared.target);c=bridge.client
     c.run('image.duplicate',name='PSD ratio adaptation',mergedOnly=False)
     copied=c.run('document.inspect')
@@ -161,4 +162,13 @@ def apply_reflow(bridge,prepared,path):
         # backups are hidden, so the new scene can sit immediately above them.
         position='above' if not info['layers'][-1].get('visible',True) else 'below'
         c.run('layer.moveTo',layer=new,target=copied['layers'][-1]['id'],position=position)
-    output=bridge.exchange/('reflow-'+prepared.job.name+'.psd');c.call('app.save',path=str(output));return output
+    output=bridge.exchange/('reflow-'+prepared.job.name+'.psd');c.call('app.save',path=str(output))
+    if info.get('path'):
+        from .reflow_output import copy_beside
+        try:result=copy_beside(output,info['path'],width,height)
+        except OSError as error:raise RuntimeError(f'Cannot save beside project; result retained at {output}: {error}') from error
+        c.call('app.reflowSaved',source=prepared.target.index,path=str(result),exported=str(output))
+        try:output.unlink()
+        except OSError:pass  # Publication succeeded; a temporary-file lock is nonfatal.
+        return result
+    return output

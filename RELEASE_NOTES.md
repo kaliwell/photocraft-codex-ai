@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 比例自适应结果保存到原工程同级目录，重名自动编号，关联新文档保存路径；未保存工程使用临时输出。
+- Save ratio-adapted PSDs beside their source project with collision-safe names and the correct document save identity. Unsaved projects keep temporary output.
+
 - 修复局部修改返回图的小幅构图偏移：基于未修改上下文校正位置/缩放，保持一次采样；新增可靠性检查，失败保留结果并拒绝自动导入。Windows 开发版包含 NumPy 与 OpenCV headless 对齐依赖。
 - Register selection-edit returns against unchanged context, preserving single-pass sampling; reject unreliable alignment and retain raw results. Bundle NumPy/OpenCV headless dependencies.
 

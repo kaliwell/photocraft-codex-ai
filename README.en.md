@@ -195,3 +195,6 @@ Text, logos and textures inside the selection may still be redrawn by the model.
 New tasks retain unchanged selection context. Import estimates small position, scale and skew changes, combines registration with the crop mapping, and samples the raw result once. The changed object is excluded from registration.
 
 Unreliable registration, excessive changes or inconsistent context regions retain the generated file and refuse automatic import. Try a smaller selection. Whole-canvas edits and featureless context cannot guarantee automatic correction; review internal geometry and lettering. New jobs record `edit-alignment.json`; legacy jobs without context retain their original mapping behavior.
+
+
+Ratio-adapted PSDs default to the source project folder, e.g. `Poster.psb` → `Poster_自适应_1500x2000.psd`. Existing results receive numbered suffixes instead of being overwritten. The new document adopts this save path for subsequent Ctrl+S. Unsaved projects retain temporary output; failure to write beside the project reports an error and retains the internal export.

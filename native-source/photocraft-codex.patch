@@ -2608,10 +2608,18 @@ index 000000000..d5cf36266
 +    }
 +}
 diff --git a/crates/ui-egui/src/control.rs b/crates/ui-egui/src/control.rs
-index e979d3d82..526784f8e 100644
+index e979d3d82..06719305d 100644
 --- a/crates/ui-egui/src/control.rs
 +++ b/crates/ui-egui/src/control.rs
-@@ -209,6 +209,7 @@ pub(super) const METHODS: &[&str] = &[
+@@ -186,6 +186,7 @@ pub(super) const METHODS: &[&str] = &[
+     "app.open",
+     "app.quit",
+     "app.save",
++    "app.reflowSaved",
+     "engine.commands",
+     "engine.execute",
+     "jobs.cancel",
+@@ -209,6 +210,7 @@ pub(super) const METHODS: &[&str] = &[
      "ui.screenshot",
      "ui.set",
      "ui.type",
@@ -2620,7 +2628,7 @@ index e979d3d82..526784f8e 100644
      "ui.window.open",
  ];
 diff --git a/crates/ui-egui/src/control/dispatch.rs b/crates/ui-egui/src/control/dispatch.rs
-index 3c7b22dda..581d7d683 100644
+index 3c7b22dda..c3920029e 100644
 --- a/crates/ui-egui/src/control/dispatch.rs
 +++ b/crates/ui-egui/src/control/dispatch.rs
 @@ -1056,6 +1056,7 @@ fn dialog_confirm_or_apply(app: &mut PhotocraftApp, req: &ControlRequest, id: u6
@@ -2631,6 +2639,67 @@ index 3c7b22dda..581d7d683 100644
          "ui.pointer" => pointer(app, ctx, p),
          "ui.click" | "ui.move" => click(app, ctx, p, req.method == "ui.click"),
          "ui.key" => key(app, ctx, p),
+@@ -1379,6 +1380,7 @@ fn app_methods(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlReques
+             }
+             Err(e) => err(e),
+         },
++        "app.reflowSaved" => wrap(adopt_reflow_path(app, p)),
+         "app.quit" => {
+             app.allow_close = true;
+             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+@@ -1388,6 +1390,52 @@ fn app_methods(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlReques
+     })
+ }
+ 
++fn adopt_reflow_path(app: &mut PhotocraftApp, p: &Value) -> Result<Value, String> {
++    #[cfg(target_arch = "wasm32")]
++    {
++        let _ = (app, p);
++        Err("not available on the web".into())
++    }
++    #[cfg(not(target_arch = "wasm32"))]
++    {
++        use std::path::Path;
++        let source = u64_param(p, "source").ok_or("missing source document")? as usize;
++        if app.session.active_index() == Some(source) {
++            return Err("source must remain unchanged".into());
++        }
++        let source_path = app.session.documents().get(source).and_then(|s| s.path.as_deref()).ok_or("source has no saved path")?;
++        let target = str_param(p, "path").ok_or("missing path")?;
++        let src = Path::new(source_path);
++        let dst = Path::new(target);
++        let parent = src.parent().ok_or("source has no parent")?.canonicalize().map_err(|e| e.to_string())?;
++        let actual = dst.canonicalize().map_err(|e| e.to_string())?;
++        let stem = src.file_stem().and_then(|s| s.to_str()).ok_or("invalid source name")?;
++        let prefix = format!("{stem}_自适应_");
++        if actual.parent() != Some(parent.as_path())
++            || !dst.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with(&prefix) && s.ends_with(".psd"))
++            || !actual.is_file()
++        {
++            return Err("result must be a new sibling PSD of the source".into());
++        }
++        let state = app.session.active_mut().ok_or("no document")?;
++        if state.path.as_deref() != str_param(p, "exported") || state.revision != state.saved_revision {
++            return Err("exported reflow document changed before publication".into());
++        }
++        if !state
++            .path
++            .as_deref()
++            .and_then(|s| Path::new(s).file_name())
++            .and_then(|s| s.to_str())
++            .is_some_and(|s| s.starts_with("reflow-") && s.ends_with(".psd"))
++        {
++            return Err("active document is not an exported reflow copy".into());
++        }
++        let (doc, revision) = (state.doc.id, state.revision);
++        app.saved_automation(doc, revision, target, &[], false);
++        Ok(json!({"path":target}))
++    }
++}
++
+ fn app_open(app: &mut PhotocraftApp, path: &str) -> Outcome {
+     if let Some(outcome) = open_pcraft_directory(app, path) {
+         return outcome;
 diff --git a/crates/ui-egui/src/control/inspect.rs b/crates/ui-egui/src/control/inspect.rs
 index 4e09d79a1..c3dad4856 100644
 --- a/crates/ui-egui/src/control/inspect.rs
