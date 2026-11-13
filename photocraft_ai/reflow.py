@@ -122,7 +122,7 @@ def analyze_reflow(prepared,cancel,progress):
     path=prepared.job/'reflow-plan.json';path.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf8');return path
 
 
-def apply_reflow(bridge,prepared,path,*,publish=True):
+def apply_reflow(bridge,prepared,path,*,publish=True,pending=False):
     info=prepared_info(prepared);units,backgrounds=content_units(info)
     width=prepared.layout_options['width'];height=prepared.layout_options['height']
     validate_workspace(info,width,height)
@@ -197,10 +197,10 @@ def apply_reflow(bridge,prepared,path,*,publish=True):
         position='above' if not info['layers'][-1].get('visible',True) else 'below'
         c.run('layer.moveTo',layer=new,target=copied['layers'][-1]['id'],position=position)
     if not publish:return destination
-    output=bridge.exchange/('reflow-'+prepared.job.name+'.psd');c.call('app.save',path=str(output))
+    output=bridge.exchange/('reflow-'+prepared.job.name+('-pending' if pending else '')+'.psd');c.call('app.save',path=str(output))
     if info.get('path'):
         from .reflow_output import copy_beside
-        try:result=copy_beside(output,info['path'],width,height)
+        try:result=copy_beside(output,info['path'],width,height,pending=pending)
         except OSError as error:raise RuntimeError(f'Cannot save beside project; result retained at {output}: {error}') from error
         c.call('app.reflowSaved',source=prepared.target.index,path=str(result),exported=str(output))
         try:output.unlink()

@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- PSD 比例适配达到三轮审查上限、审查超时或返回无效审查结果时，保存最近有效方案为原工程同级的“自适应_宽x高_待审查.psd”，重名自动编号；新草稿保留分层和保存路径，明确标记审查未通过。取消任务和首次渲染失败不额外导出。
+- Preserve a layered, review-required PSD beside the source when bounded layout review fails, times out or returns invalid results. Use collision-safe pending filenames, retain the latest valid correction, and keep review failure visible instead of reporting success.
+
 - 修复竖版 PSB 适配方图时的功能卡片和标注脱离：多卡片剪贴组按卡片拆分，并绑定其他分组内的标题；细长产品、箭头、说明与关联投影共用变换。
 - 背景扩图不再收集独立装饰笔迹、局部投影与空组；原生渐变叠加均匀底色时直接适配背景，不调用生图。运动模糊投影先保留源智能对象备份，再转换副本，避免缩放后出现硬边。
 - 审查增加跨不同卡片高度的宽度一致性检查，并明确只审查布局，避免要求坐标计划修复源图片噪点。

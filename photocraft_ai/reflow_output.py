@@ -3,11 +3,12 @@ from pathlib import Path
 import shutil
 
 
-def copy_beside(staging,source,width,height):
+def copy_beside(staging,source,width,height,*,pending=False):
     source=Path(source)
     if not source.is_absolute():raise ValueError('Project path must be absolute')
     parent=source.parent.resolve(strict=True)
     base=f'{source.stem}_自适应_{width}x{height}'
+    if pending:base+='_待审查'
     for index in range(1,10001):
         output=parent/(base+('' if index==1 else f'_{index}')+'.psd')
         try:handle=output.open('xb')

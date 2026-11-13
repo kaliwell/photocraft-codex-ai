@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from PIL import Image
 from photocraft_ai.reflow_geometry import visible_bounds,mixed_clusters
-from photocraft_ai.reflow_review import validate_review,review_reflow
+from photocraft_ai.reflow_review import validate_review,review_reflow,ReviewPending
 from photocraft_ai.backend import Cancelled
 
 
@@ -54,14 +54,49 @@ class ReviewTests(unittest.TestCase):
         plan={'placements':[{'key':f'u{i}','x':0,'y':0,'scale':.4 if i==0 else .8} for i in range(6)]}
         with self.assertRaises(ValueError):validate_review({'approved':True,'issues':[],'placements':plan['placements']},units,500,500,plan)
 
-    def test_review_failure_is_bounded_without_publishing(self):
+    def test_review_failure_saves_latest_correction_as_pending_draft(self):
         with tempfile.TemporaryDirectory() as folder:
             p,s,path,_=self.fixture(folder)
             responses=[{'approved':False,'issues':['spacing'],'placements':[{'key':'u1','x':i*10,'y':0,'scale':1}]} for i in (1,2,3)]
             with patch('photocraft_ai.reflow_review.apply_reflow',return_value=1) as render,patch('photocraft_ai.reflow_review.analyze_json',side_effect=responses):
-                with self.assertRaises(ValueError):review_reflow(s,p,path,threading.Event(),lambda _:None)
-                self.assertEqual(render.call_count,3)
-                self.assertTrue(all(not call.kwargs['publish'] for call in render.call_args_list))
+                with self.assertRaises(ReviewPending) as caught:review_reflow(s,p,path,threading.Event(),lambda _:None)
+                self.assertEqual(render.call_count,4)
+                self.assertTrue(all(call.kwargs=={'publish':False} for call in render.call_args_list[:3]))
+                saved=render.call_args_list[-1]
+                self.assertEqual(saved.kwargs,{'pending':True})
+                self.assertEqual(json.loads(saved.args[2].read_text())['placements'],responses[-1]['placements'])
+                self.assertEqual(caught.exception.draft_path,1)
+                self.assertEqual(json.loads((p.job/'reflow-pending.json').read_text())['status'],'review_required')
+
+    def test_review_service_failure_preserves_rendered_plan(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p,s,path,_=self.fixture(folder)
+            with patch('photocraft_ai.reflow_review.apply_reflow',return_value=1) as render,patch('photocraft_ai.reflow_review.analyze_json',side_effect=TimeoutError('review timeout')):
+                with self.assertRaisesRegex(ReviewPending,'review timeout'):review_reflow(s,p,path,threading.Event(),lambda _:None)
+                self.assertEqual(render.call_count,2)
+                self.assertEqual(render.call_args.args[2],path)
+                self.assertEqual(render.call_args.kwargs,{'pending':True})
+
+    def test_initial_render_failure_does_not_publish(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p,s,path,_=self.fixture(folder)
+            with patch('photocraft_ai.reflow_review.apply_reflow',side_effect=ValueError('source changed')) as render:
+                with self.assertRaisesRegex(ValueError,'source changed'):review_reflow(s,p,path,threading.Event(),lambda _:None)
+                self.assertEqual(render.call_count,1)
+
+    def test_cancellation_during_review_does_not_publish(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p,s,path,_=self.fixture(folder)
+            with patch('photocraft_ai.reflow_review.apply_reflow',return_value=1) as render,patch('photocraft_ai.reflow_review.analyze_json',side_effect=Cancelled('Cancelled')):
+                with self.assertRaises(Cancelled):review_reflow(s,p,path,threading.Event(),lambda _:None)
+                self.assertEqual(render.call_count,1)
+
+    def test_failed_draft_save_reports_both_errors_without_claiming_success(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p,s,path,_=self.fixture(folder)
+            with patch('photocraft_ai.reflow_review.apply_reflow',side_effect=[1,OSError('disk full')]),patch('photocraft_ai.reflow_review.analyze_json',side_effect=TimeoutError('review timeout')):
+                with self.assertRaisesRegex(RuntimeError,'review timeout; could not save.*disk full'):review_reflow(s,p,path,threading.Event(),lambda _:None)
+                self.assertFalse((p.job/'reflow-pending.json').exists())
 
     def test_cancellation_never_renders_or_exports(self):
         with tempfile.TemporaryDirectory() as folder:
