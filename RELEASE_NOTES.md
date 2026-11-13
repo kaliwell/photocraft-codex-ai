@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 比例适配增强疏密调整：各独立产品、功能卡片和标题可分别等比放大，不再仅以内容放进画布为排版完成条件；视觉审查遇到明显空旷布局时，要求同时调整位置和缩放。保持卡片大小协调、卡片内图文关系以及产品和标注绑定，保留必要留白。
+- Ratio reflow now explicitly balances visual density with independent uniform scales for products, feature cards and headlines. Review sparse layouts for both position and scale corrections while preserving bound captions/callouts and intentional whitespace.
+
 - PSD 比例适配达到三轮审查上限、审查超时或返回无效审查结果时，保存最近有效方案为原工程同级的“自适应_宽x高_待审查.psd”，重名自动编号；新草稿保留分层和保存路径，明确标记审查未通过。取消任务和首次渲染失败不额外导出。
 - Preserve a layered, review-required PSD beside the source when bounded layout review fails, times out or returns invalid results. Use collision-safe pending filenames, retain the latest valid correction, and keep review failure visible instead of reporting success.
 

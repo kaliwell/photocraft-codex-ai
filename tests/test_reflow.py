@@ -3,6 +3,11 @@ from photocraft_ai.reflow import content_units,validate_plan
 
 
 class ReflowTests(unittest.TestCase):
+    def test_independent_elements_can_enlarge_by_different_uniform_scales(self):
+        units=[{'key':'hero','bounds':[0,0,80,300]},{'key':'card','bounds':[0,0,100,100]},{'key':'title','bounds':[0,0,200,30]}]
+        plan={'placements':[{'key':'hero','x':220,'y':20,'scale':1.4},{'key':'card','x':20,'y':20,'scale':1.8},{'key':'title','x':20,'y':460,'scale':1.2}]}
+        self.assertEqual(validate_plan(plan,units,500,500),plan)
+
     def test_six_clipping_panels_bind_captions_from_a_different_folder(self):
         panels=[];labels=[]
         for y in (20,170,320):
