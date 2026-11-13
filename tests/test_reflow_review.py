@@ -49,6 +49,11 @@ class ReviewTests(unittest.TestCase):
         plan={'placements':[{'key':f'u{i}','x':0,'y':0,'scale':.1 if i==0 else 1} for i in range(3)]}
         with self.assertRaises(ValueError):validate_review({'approved':True,'issues':[],'placements':plan['placements']},units,100,100,plan)
 
+    def test_card_rows_with_different_heights_still_require_consistent_widths(self):
+        units=[{'key':f'u{i}','bounds':[0,0,100,h],'peer_panel':[100,h]} for i,h in enumerate((80,80,100,100,120,120))]
+        plan={'placements':[{'key':f'u{i}','x':0,'y':0,'scale':.4 if i==0 else .8} for i in range(6)]}
+        with self.assertRaises(ValueError):validate_review({'approved':True,'issues':[],'placements':plan['placements']},units,500,500,plan)
+
     def test_review_failure_is_bounded_without_publishing(self):
         with tempfile.TemporaryDirectory() as folder:
             p,s,path,_=self.fixture(folder)

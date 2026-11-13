@@ -3,7 +3,7 @@ import json,math,re
 from pathlib import Path
 from .layout import analyze_json
 from .layer_dependencies import protected_group
-from .reflow_geometry import visible_bounds,mixed_clusters
+from .reflow_geometry import visible_bounds,mixed_clusters,bind_panel_labels,bind_product_callouts
 
 
 def validate_workspace(info,width,height):
@@ -63,7 +63,7 @@ def content_units(info):
             if key in scene_paths:
                 backgrounds.append({'path':key,'bounds':row.get('bounds'),'scene':True});continue
             if background(row):backgrounds.append({'path':key,'bounds':row.get('bounds')});continue
-            if row.get('children') and not protected_group(row) and (info.get('split_reflow_groups') or contains_background(row) or any(p[:len(key)]==key for p in scene_paths)):
+            if row.get('children') and not protected_group(row) and (contains_background(row) or any(p[:len(key)]==key for p in scene_paths) or (info.get('split_reflow_groups') and all(c['kind']=='Type' for c in row['children']))):
                 walk(row['children'],key);continue
             box=bounds(row)
             if not box:continue
@@ -71,6 +71,8 @@ def content_units(info):
             if x1<=x0 or y1<=y0:continue
             units.append({'key':f'u{len(units)+1}','path':key,'name':row['name'],'kind':row['kind'],'bounds':[x0,y0,x1-x0,y1-y0]})
     walk(info['layers'])
+    units=bind_product_callouts(bind_panel_labels(units,at),at)
+    for i,unit in enumerate(units):unit['key']=f'u{i+1}'
     def labels(row):
         if not row.get('visible',True):return []
         result=[row['text']['text']] if row.get('text',{}).get('text') else []
@@ -81,8 +83,9 @@ def content_units(info):
         else:unit['labels']=labels(at(unit['path']))[:12]
         row=at(unit['path']);children=row.get('children',[])
         bases=[i for i,r in enumerate(children) if r['kind']=='Shape' and i>0 and children[i-1].get('clipped')]
-        if len(bases)==1 and (not unit.get('paths') or unit['path']+(bases[0],) in unit['paths']):
-            panel=children[bases[0]].get('bounds')
+        included=[i for i in bases if not unit.get('paths') or unit['path']+(i,) in unit['paths']]
+        if len(included)==1:
+            panel=children[included[0]].get('bounds')
             if panel:unit['peer_panel']=panel[2:]
     if (not units and not backgrounds and not info.get('split_reflow_groups')) or len(units)>80:raise ValueError('PSD reflow requires visible content or a background; at most 80 content groups')
     return units,backgrounds
@@ -131,7 +134,9 @@ def apply_reflow(bridge,prepared,path,*,publish=True):
     c.run('image.duplicate',name='PSD ratio adaptation',mergedOnly=False)
     copied=c.run('document.inspect')
     destination=c.run('session.inspect')['active']
+    support_layers={}
     def layer_id(indices):
+        if tuple(indices) in support_layers:return support_layers[tuple(indices)]
         rows=copied['layers'];row=None
         for index in indices:row=rows[index];rows=row.get('children',[])
         return row['id']
@@ -140,6 +145,15 @@ def apply_reflow(bridge,prepared,path,*,publish=True):
     if covers.exists():
         for index in json.loads(covers.read_text(encoding='utf8')):
             c.run('layer.setProps',layer=copied['layers'][index]['id'],visible=False)
+    for unit in units:
+        for indices in unit.get('rasterize_support_paths',[]):
+            original=layer_id(indices)
+            layer=c.run('layer.duplicate',layer=original,inPlace=True,name='Adapted product shadow')['layer']
+            # Preserve the imported filter appearance before affine transforms
+            # invalidate its cached pixels. Keep the editable original as backup.
+            c.run('layer.rasterize.layer',layer=layer)
+            c.run('layer.setProps',layer=original,visible=False)
+            support_layers[tuple(indices)]=layer
     c.run('image.canvasSize',width=max(width,info['width']),height=max(height,info['height']),anchor='topLeft',extensionColor='white')
     for item in backgrounds:
         c.run('layer.setProps',layer=layer_id(item['path']),locked=False)
@@ -164,6 +178,7 @@ def apply_reflow(bridge,prepared,path,*,publish=True):
         import shutil,uuid
         imported=bridge.exchange/('outpainted-'+uuid.uuid4().hex+'.png')
         shutil.copy2(prepared.job/'reflow-outpaint.png',imported)
+        before_import=c.run('document.inspect')['layers']
         scratch=None
         try:
             c.call('app.open',path=str(imported))
@@ -175,8 +190,8 @@ def apply_reflow(bridge,prepared,path,*,publish=True):
             imported.unlink(missing_ok=True)
         c.run('document.activate',document=destination)
         from .reflow_background import imported_layer
-        new=imported_layer(copied['layers'],c.run('document.inspect')['layers'])
-        c.run('layer.setProps',layer=new,name='AI outpainted background')
+        new=imported_layer(before_import,c.run('document.inspect')['layers'])
+        c.run('layer.setProps',layer=new,name='Adapted gradient background' if (prepared.job/'reflow-native-backdrop.json').exists() else 'AI outpainted background')
         # A native Background layer cannot have anything below it. Scene
         # backups are hidden, so the new scene can sit immediately above them.
         position='above' if not info['layers'][-1].get('visible',True) else 'below'

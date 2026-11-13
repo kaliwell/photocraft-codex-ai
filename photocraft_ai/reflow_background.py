@@ -25,7 +25,7 @@ def scene_roots(info):
             if protected_group(r):continue
             key=path+(i,)
             if r.get('children'):walk(r['children'],key)
-            elif not editable(r) and (not path or r['kind'] in ('Fill','Adjustment') or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)) and (r['kind']!='Smart Object' or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9)):
+            elif r['kind'] in ('Pixel','Smart Object','Fill','Adjustment') and not editable(r) and (r['kind'] in ('Fill','Adjustment') or (r.get('bounds') and r['bounds'][2]>=info['width']*.9 and r['bounds'][3]>=info['height']*.9) or (r['kind']=='Pixel' and not r.get('hasMask') and r.get('bounds') and r['bounds'][3]>=info['height']*.98 and r['bounds'][1]<=0 and (r['bounds'][0]<=0 or r['bounds'][0]+r['bounds'][2]>=info['width']))):
                 candidates.append(key)
                 b=r.get('bounds')
                 full=full or bool(b and b[2]>=info['width']*.9 and b[3]>=info['height']*.9)
@@ -39,6 +39,7 @@ def capture_scene(bridge,target,info,job,width,height):
     if not roots:return
     c=bridge.client;bridge.activate(target);scratch=None
     path=bridge.exchange/('reflow-scene-'+uuid.uuid4().hex+'.png')
+    base_path=path.with_name(path.stem+'-base.png')
     try:
         c.run('image.duplicate',name='Background outpaint source',mergedOnly=False)
         scratch=c.run('session.inspect')['active'];copy=c.run('document.inspect')
@@ -58,9 +59,23 @@ def capture_scene(bridge,target,info,job,width,height):
             if all(high-low<=2 for low,high in rgba.getextrema()[:3]) and rgba.getchannel('A').getextrema()==(255,255):return
             rgba.save(job/'reflow-scene.png')
         (job/'reflow-scene-layers.json').write_text(json.dumps(roots),encoding='utf8')
+        # A native gradient over a uniform canvas needs no generated pixels. Inspect
+        # the raster base without fills; never infer a flat background from its name.
+        def at(indices):
+            rows=copy['layers']
+            for index in indices:row=rows[index];rows=row.get('children',[])
+            return row
+        fills=[at(p) for p in roots if at(p)['kind'] in ('Fill','Adjustment')]
+        if fills:
+            for row in fills:c.run('layer.setProps',layer=row['id'],visible=False)
+            c.call('app.save',path=str(base_path))
+            with Image.open(base_path) as image:
+                base=image.convert('RGBA')
+                if all(hi-lo<=2 for lo,hi in base.getextrema()[:3]) and base.getchannel('A').getextrema()==(255,255):
+                    (job/'reflow-native-backdrop.json').write_text(json.dumps({'method':'resize-native-backdrop'}),encoding='utf8')
     finally:
         if scratch is not None:c.run('file.close',document=scratch)
-        bridge.activate(target);path.unlink(missing_ok=True)
+        bridge.activate(target);path.unlink(missing_ok=True);base_path.unlink(missing_ok=True)
 
 
 def scene_placement(source_size,size):
@@ -87,6 +102,10 @@ def generate_scene(prepared,backend,cancel,progress):
     job=prepared.job;source=job/'reflow-scene.png'
     if not source.exists():return
     width=prepared.layout_options['width'];height=prepared.layout_options['height']
+    if (job/'reflow-native-backdrop.json').exists():
+        progress('Adapting native gradient background')
+        with Image.open(source) as image:image.convert('RGBA').resize((width,height),Image.Resampling.LANCZOS).save(job/'reflow-outpaint.png')
+        return
     task=job/'outpaint';task.mkdir(exist_ok=True)
     with Image.open(source) as original:
         fitted,xy=scene_placement(original.size,(width,height))

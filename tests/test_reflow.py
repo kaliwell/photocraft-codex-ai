@@ -3,6 +3,36 @@ from photocraft_ai.reflow import content_units,validate_plan
 
 
 class ReflowTests(unittest.TestCase):
+    def test_six_clipping_panels_bind_captions_from_a_different_folder(self):
+        panels=[];labels=[]
+        for y in (20,170,320):
+            for x in (20,280):
+                panels += [{'kind':'Pixel','name':'Photo','clipped':True,'bounds':[x-20,y-20,180,200]},
+                           {'kind':'Shape','name':'Card','bounds':[x,y,120,130]}]
+                labels += [{'kind':'Type','name':'Caption','bounds':[x+10,y+10,100,20],'text':{'text':'feature'}}]
+        info={'width':500,'height':600,'split_reflow_groups':True,'layers':[
+            {'kind':'Group','name':'Titles','children':labels}, {'kind':'Group','name':'Panels','children':panels}]}
+        units,_=content_units(info)
+        self.assertEqual(len(units),6)
+        self.assertTrue(all(len(u['paths'])==3 and u['peer_panel']==[120,130] for u in units))
+        paths=[p for u in units for p in u['paths']]
+        self.assertEqual(len(paths),len(set(paths)))
+        info['layers'][1]['hasMask']=True
+        units,_=content_units(info)
+        self.assertTrue(any(u['path']==(1,) and not u.get('paths') for u in units))
+
+    def test_product_callouts_and_shadow_share_one_transform(self):
+        product={'kind':'Group','name':'Product','children':[{'kind':'Smart Object','name':'Pen','bounds':[100,20,20,400]}]}
+        arrows=[{'kind':'Pixel','name':'Arrow','bounds':[125,y,30,8]} for y in (40,240)]
+        text=[{'kind':'Type','name':'Label','bounds':[160,y,90,20],'text':{'text':'feature'}} for y in (35,235)]
+        labels={'kind':'Group','name':'Callouts','children':arrows+text}
+        shadow={'kind':'Smart Object','name':'Shadow','bounds':[105,400,300,20],'hasMask':True,'smartFilters':[{'command':'filter.blur.motionBlur'}]}
+        info={'width':500,'height':600,'split_reflow_groups':True,'layers':[product,labels,shadow]}
+        units,_=content_units(info)
+        self.assertEqual(len(units),1)
+        self.assertEqual(units[0]['paths'],[(0,),(1,),(2,)])
+        self.assertEqual(units[0]['rasterize_support_paths'],[(2,)])
+        self.assertEqual(units[0]['bounds'],[100,20,150,400])
     def test_unnamed_full_canvas_photo_and_edge_repair_stay_aligned(self):
         info={'width':1500,'height':1500,'layers':[{'kind':'Group','name':'Copy','children':[{'kind':'Type','name':'Title','bounds':[0,0,500,100]}]},{'kind':'Pixel','name':'Layer 2','bounds':[-131,0,209,1500]},{'kind':'Pixel','name':'Layer 1','bounds':[60,0,1500,1500]},{'kind':'Pixel','name':'Hidden scene','visible':False,'bounds':[0,0,1500,1500]}]}
         units,backgrounds=content_units(info)
