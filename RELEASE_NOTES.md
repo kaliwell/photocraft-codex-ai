@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复比例适配导入的新背景被原工程剪贴蒙版自动裁掉：背景移动到目标层级后明确解除剪贴并显示，避免底层备份隐藏后背景透明、黑色标题看似丢失。源工程的剪贴结构和隐藏备份保留。
+- Keep imported reflow backgrounds visible and independent of source clipping stacks, preventing transparent canvases when original background backups are hidden.
+
 - 比例适配增强疏密调整：各独立产品、功能卡片和标题可分别等比放大，不再仅以内容放进画布为排版完成条件；视觉审查遇到明显空旷布局时，要求同时调整位置和缩放。保持卡片大小协调、卡片内图文关系以及产品和标注绑定，保留必要留白。
 - Ratio reflow now explicitly balances visual density with independent uniform scales for products, feature cards and headlines. Review sparse layouts for both position and scale corrections while preserving bound captions/callouts and intentional whitespace.
 

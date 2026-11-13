@@ -199,6 +199,9 @@ def apply_reflow(bridge,prepared,path,*,publish=True,pending=False):
         # backups are hidden, so the new scene can sit immediately above them.
         position='above' if not info['layers'][-1].get('visible',True) else 'below'
         c.run('layer.moveTo',layer=new,target=copied['layers'][-1]['id'],position=position)
+        # Inserting into an existing clipping stack can auto-clip the imported
+        # background to the hidden source base. It must cover the canvas alone.
+        c.run('layer.setProps',layer=new,clipped=False,visible=True)
     if not publish:return destination
     output=bridge.exchange/('reflow-'+prepared.job.name+('-pending' if pending else '')+'.psd');c.call('app.save',path=str(output))
     if info.get('path'):
