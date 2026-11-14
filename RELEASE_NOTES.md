@@ -1,5 +1,8 @@
 # Unreleased / 统一开发版新增
 
+- 修复大矩形选区补全左右白边时整张画面被重绘或误判对齐的问题：明确请求补全左右白边且两侧为连续纯白时，仅编辑选区内白边与窄接缝；中间产品、证书和文字保留。空白边带不作为对齐参照，实际输出仍遵守原选区和空洞；普通局部修改不改变选区，原有对齐阈值保留。
+- For explicit white side-border outpainting, restrict edits to confidently detected margins and narrow seams, register against the retained central photo, and preserve all pixels outside the effective selection. Ordinary fills and alignment thresholds remain unchanged.
+
 - 修复比例适配导入的新背景被原工程剪贴蒙版自动裁掉：背景移动到目标层级后明确解除剪贴并显示，避免底层备份隐藏后背景透明、黑色标题看似丢失。源工程的剪贴结构和隐藏备份保留。
 - Keep imported reflow backgrounds visible and independent of source clipping stacks, preventing transparent canvases when original background backups are hidden.
 

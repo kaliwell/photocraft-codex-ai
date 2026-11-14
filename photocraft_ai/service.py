@@ -62,9 +62,14 @@ def edited_layer(image: Image.Image, mask: Image.Image, job: Path) -> Image.Imag
         if mapping.get('version')==2 and context.is_file():
             from .edit_alignment import estimate,render,AlignmentError
             crop=tuple(mapping['crop_box'])
+            registration_mask=mask
+            border=job/'edit-border.json'
+            if border.is_file():
+                from .edit_border import alignment_mask
+                registration_mask=alignment_mask(mask,json.loads(border.read_text(encoding='utf8')))
             try:
                 with Image.open(context) as original:
-                    matrix,report=estimate(original,aligned.crop(crop),mask.crop(crop))
+                    matrix,report=estimate(original,aligned.crop(crop),registration_mask.crop(crop))
             except AlignmentError as error:
                 (job/'edit-alignment.json').write_text(json.dumps({'status':'rejected','message':str(error)},ensure_ascii=False),encoding='utf8')
                 raise
@@ -191,6 +196,13 @@ class Service:
             full, mask = self.bridge._snapshot(target)
             if mask is None or not mask.getbbox():
                 raise RuntimeError('选区为空。')
+            if mode=='fill':
+                from .edit_border import refine_border_mask,BORDER_INSTRUCTION
+                refined,border=refine_border_mask(full,mask,prompt)
+                if border:
+                    mask.save(job/'selection-user.png')
+                    mask=refined;prompt+=BORDER_INSTRUCTION
+                    (job/'edit-border.json').write_text(json.dumps(border),encoding='utf8')
             dims = full.size
             source, guide = job / 'source.png', job / 'guide.png'
             full.save(source)
@@ -273,10 +285,17 @@ class Service:
                 support = prepared.mask.point([0] + [255] * 255)
                 prepared.mask.save(prepared.job / 'blend-mask.png')
                 layer = generated_layer(image, prepared.mask) if prepared.mode == 'generate' else edited_layer(image, prepared.mask,prepared.job)
+                native_feather=prepared.feather_px
+                if (prepared.job/'edit-border.json').is_file():
+                    # Bake this seam into pixel alpha: older native PSD writers
+                    # do not round-trip mask feather consistently. Keep a hard,
+                    # editable support mask and preserve the selection exterior.
+                    layer.putalpha(ImageChops.multiply(layer.getchannel('A'),inward_feather(support,native_feather)))
+                    native_feather=0
             output = prepared.job / 'layer.png'
             layer.save(output)
             b.insert_results(prepared.target, [output.read_bytes()], Rect(0, 0, *prepared.size),
-                             'Codex AI · ' + prepared.prompt[:40], feather=prepared.feather_px,
+                             'Codex AI · ' + prepared.prompt[:40], feather=native_feather,
                              temp_dir=None, use_selection_mask=True, mask_pixels=support.tobytes())
             # No automatic mutation retry: a lost acknowledgement must not insert twice.
             b.commit_above(prepared.target, prepared.active_layer)
